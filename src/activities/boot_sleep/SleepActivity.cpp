@@ -1416,9 +1416,17 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const std::str
       bitmap.hasGreyscale() && (preserveBackground || SETTINGS.sleepScreenCoverFilter ==
                                                           CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER);
 
-  if (!renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY, preserveBackground)) {
-    renderer.displayBuffer(kSleepClean);
-    return;
+  // Single-pass greyscale decode is only for full-screen wallpapers. Transparent
+  // overlays must keep master's white-as-transparent drawBitmap path.
+  SleepGreyStripBatch greyStrips;
+  const bool greyscaleOnce =
+      hasGreyscale && !preserveBackground &&
+      renderer.drawGreyscaleBitmapForSleep(bitmap, x, y, pageWidth, pageHeight, cropX, cropY, greyStrips);
+  if (!greyscaleOnce) {
+    if (!renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY, preserveBackground)) {
+      renderer.displayBuffer(kSleepClean);
+      return;
+    }
   }
 
   if (!preserveBackground &&
@@ -1431,10 +1439,17 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const std::str
   }
 
   if (hasGreyscale) {
-    renderSleepGrayscaleOverlay(renderer, [&]() {
-      bitmap.rewindToData();
-      renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY);
-    });
+    if (greyscaleOnce) {
+      displaySleepGrayscaleBase(renderer);
+      greyStrips.flush(renderer);
+      renderer.displayGrayBuffer();
+      renderer.setRenderMode(GfxRenderer::BW);
+    } else {
+      renderSleepGrayscaleOverlay(renderer, [&]() {
+        bitmap.rewindToData();
+        renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY);
+      });
+    }
   } else {
     displaySleepBuffer(renderer);
   }
