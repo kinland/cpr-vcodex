@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cassert>
 #include <climits>
+#include <cstring>
 #include <memory>
 #include <new>
 
@@ -1650,6 +1651,7 @@ bool SleepGreyStripBatch::appendStrip(const int yStart, const int numRows, const
   auto lsbCopy = std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[stripBytes]);
   auto msbCopy = std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[stripBytes]);
   if (!lsbCopy || !msbCopy) {
+    LOG_ERR("GFX", "OOM: sleep grey strip batch (%zu bytes x2)", stripBytes);
     return false;
   }
 
@@ -1659,7 +1661,7 @@ bool SleepGreyStripBatch::appendStrip(const int yStart, const int numRows, const
   return true;
 }
 
-void SleepGreyStripBatch::flush(const GfxRenderer& renderer) const {
+void SleepGreyStripBatch::flushToDisplay(const GfxRenderer& renderer) const {
   for (const Strip& strip : strips_) {
     renderer.writeGrayscalePlaneStrip(true, strip.lsb.get(), strip.yStart, strip.numRows);
     renderer.writeGrayscalePlaneStrip(false, strip.msb.get(), strip.yStart, strip.numRows);
@@ -1668,7 +1670,7 @@ void SleepGreyStripBatch::flush(const GfxRenderer& renderer) const {
 
 bool GfxRenderer::drawGreyscaleBitmapForSleep(const Bitmap& bitmap, const int x, const int y, const int maxWidth,
                                               const int maxHeight, const float cropX, const float cropY,
-                                              SleepGreyStripBatch& greyStrips) const {
+                                              ISleepGreyStripSink& stripSink) const {
   if (fontCacheManager_ && fontCacheManager_->isScanning()) {
     return false;
   }
@@ -1739,7 +1741,7 @@ bool GfxRenderer::drawGreyscaleBitmapForSleep(const Bitmap& bitmap, const int x,
       return true;
     }
     const size_t activeStripBytes = static_cast<size_t>(displayWidthBytes) * static_cast<size_t>(rows);
-    return greyStrips.appendStrip(yStart, rows, activeStripBytes, lsbStrip, msbStrip);
+    return stripSink.appendStrip(yStart, rows, activeStripBytes, lsbStrip, msbStrip);
   };
 
   const auto flushThroughStrip = [&](const int targetStripIdx) -> bool {

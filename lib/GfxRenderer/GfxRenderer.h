@@ -24,6 +24,7 @@ class TtfEpdFont;
 #include <vector>
 
 #include "Bitmap.h"
+#include "SleepGreyStripSink.h"
 
 namespace glyphBitmap {
 struct Frame;
@@ -43,15 +44,14 @@ enum Color : uint8_t {
 
 class GfxRenderer;
 
-// Deferred grey plane strips for sleep rendering. Populated during a single BMP read,
-// then flushed after displaySleepGrayscaleBase so stale UI grey state is not composited in.
-class SleepGreyStripBatch {
+// In-memory grey strip batch. Used only when SD streaming is unavailable.
+class SleepGreyStripBatch : public ISleepGreyStripSink {
  public:
-  bool empty() const { return strips_.empty(); }
+  bool empty() const override { return strips_.empty(); }
 
-  bool appendStrip(int yStart, int numRows, size_t stripBytes, const uint8_t* lsb, const uint8_t* msb);
+  bool appendStrip(int yStart, int numRows, size_t stripBytes, const uint8_t* lsb, const uint8_t* msb) override;
 
-  void flush(const GfxRenderer& renderer) const;
+  void flushToDisplay(const GfxRenderer& renderer) const override;
 
  private:
   struct Strip {
@@ -358,11 +358,11 @@ class GfxRenderer {
   void drawIconInverted(const uint8_t bitmap[], int x, int y, int width, int height) const;
   bool drawBitmap(const Bitmap& bitmap, int x, int y, int maxWidth, int maxHeight, float cropX = 0, float cropY = 0,
                   bool whiteAsTransparent = false) const;
-  // One SD read pass: composes the BW framebuffer and records grey LSB/MSB strips in greyStrips.
+  // One SD read pass: composes the BW framebuffer and records grey LSB/MSB strips in stripSink.
   // Downscales via output-driven nearest-neighbor sampling when the source exceeds the target.
-  // Caller must displaySleepGrayscaleBase, greyStrips.flush(), then displayGrayBuffer.
+  // Caller must displaySleepGrayscaleBase, stripSink.flushToDisplay(), then displayGrayBuffer.
   bool drawGreyscaleBitmapForSleep(const Bitmap& bitmap, int x, int y, int maxWidth, int maxHeight, float cropX,
-                                   float cropY, SleepGreyStripBatch& greyStrips) const;
+                                   float cropY, ISleepGreyStripSink& stripSink) const;
   bool drawBitmap1Bit(const Bitmap& bitmap, int x, int y, int maxWidth, int maxHeight) const;
   // Counter-invert content images in the logical framebuffer so output-level
   // dark mode leaves their original polarity unchanged.
