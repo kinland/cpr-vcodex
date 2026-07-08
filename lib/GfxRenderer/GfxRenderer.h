@@ -359,6 +359,7 @@ class GfxRenderer {
   bool drawBitmap(const Bitmap& bitmap, int x, int y, int maxWidth, int maxHeight, float cropX = 0, float cropY = 0,
                   bool whiteAsTransparent = false) const;
   // One SD read pass: composes the BW framebuffer and records grey LSB/MSB strips in greyStrips.
+  // Downscales via output-driven nearest-neighbor sampling when the source exceeds the target.
   // Caller must displaySleepGrayscaleBase, greyStrips.flush(), then displayGrayBuffer.
   bool drawGreyscaleBitmapForSleep(const Bitmap& bitmap, int x, int y, int maxWidth, int maxHeight, float cropX,
                                    float cropY, SleepGreyStripBatch& greyStrips) const;
