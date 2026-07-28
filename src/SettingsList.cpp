@@ -489,8 +489,9 @@ std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* registry) {
                           StrId::STR_KOREADER_SYNC),
 
         // --- Status Bar Settings (web-only, uses StatusBarSettingsActivity) ---
+        // Index 1 (Pages+Time) is composed at display time from STR_PAGES + '+' + STR_TIME.
         SettingInfo::Enum(StrId::STR_STATUS_BAR_CHAPTER_PROGRESS, &CrossPointSettings::statusBarChapterProgress,
-                          {StrId::STR_PAGES, StrId::STR_PAGES_PLUS_TIME, StrId::STR_TIME, StrId::STR_HIDE},
+                          {StrId::STR_PAGES, StrId::STR_PAGES, StrId::STR_TIME, StrId::STR_HIDE},
                           "statusBarChapterProgress", StrId::STR_CUSTOMISE_STATUS_BAR),
         SettingInfo::Toggle(StrId::STR_BOOK_PROGRESS_PERCENTAGE, &CrossPointSettings::statusBarBookProgressPercentage,
                             "statusBarBookProgressPercentage", StrId::STR_CUSTOMISE_STATUS_BAR),
