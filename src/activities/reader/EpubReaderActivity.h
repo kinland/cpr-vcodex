@@ -18,7 +18,7 @@
 #include "ReaderToolbarUi.h"
 #include "activities/Activity.h"
 #include "components/OptionPopup.h"
-#include "util/ChapterTimeEstimate.h"
+#include "util/PageDwell.h"
 
 class Page;
 
@@ -83,7 +83,7 @@ class EpubReaderActivity final : public Activity {
   int idlePrewarmPage = -1;
   unsigned long lastRenderCompleteMs = 0;
   // Word-rate samples: dwell on the page currently displayed. Jumps never credit the left page.
-  ChapterTimeEstimate::PageDwell pageDwell;
+  PageDwell pageDwell;
   std::shared_ptr<Page> currentOverlayPageCache;
   int currentOverlayPageSpineIndex = -1;
   int currentOverlayPageNumber = -1;

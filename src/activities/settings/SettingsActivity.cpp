@@ -67,7 +67,6 @@
 #include "components/UIThemeTokens.h"
 #include "components/UiAppHelpers.h"
 #include "fontIds.h"
-#include "util/ChapterTimeEstimate.h"
 #include "util/HeaderDateUtils.h"
 #include "util/ShortcutRegistry.h"
 #include "util/ShortcutUiMetadata.h"
@@ -1147,7 +1146,7 @@ std::string SettingsActivity::settingValueText(const SettingInfo& setting) const
     const uint8_t value = SETTINGS.*(setting.valuePtr);
     if (setting.nameId == StrId::STR_STATUS_BAR_CHAPTER_PROGRESS) {
       char buf[64];
-      if (ChapterTimeEstimate::formatChapterProgressLabel(value, buf, sizeof(buf))) {
+      if (CrossPointSettings::formatChapterProgressLabel(value, buf, sizeof(buf))) {
         return buf;
       }
     }

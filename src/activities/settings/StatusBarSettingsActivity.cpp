@@ -14,7 +14,6 @@
 #include "MappedInputManager.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
-#include "util/ChapterTimeEstimate.h"
 #include "util/TimeUtils.h"
 
 namespace fui = freeink::ui;
@@ -116,7 +115,7 @@ bool fillPreviewChapterTimeEstimate(char* buf, const size_t bufSize) {
 
 std::string chapterProgressLabel(const uint8_t mode) {
   char buf[64];
-  if (ChapterTimeEstimate::formatChapterProgressLabel(mode, buf, sizeof(buf))) {
+  if (CrossPointSettings::formatChapterProgressLabel(mode, buf, sizeof(buf))) {
     return buf;
   }
   return tr(STR_HIDE);

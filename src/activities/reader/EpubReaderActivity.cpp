@@ -62,7 +62,7 @@
 #include "util/AchievementPopupUtils.h"
 #include "util/BookIdentity.h"
 #include "util/ButtonNavigator.h"
-#include "util/ChapterTimeEstimate.h"
+#include "util/PageDwell.h"
 #include "util/CompletedBookMover.h"
 #include "util/ScreenshotUtil.h"
 #include "util/TaskWatchdog.h"
@@ -2827,8 +2827,8 @@ void EpubReaderActivity::renderStatusBar() const {
   if (section->currentPage >= 0) {
     const double wordsPerMs = READING_STATS.getEffectiveWordsPerMs();
     // Skip remaining-words walk when rate is 0 or time is hidden.
-    if (ChapterTimeEstimate::statusBarWantsChapterTime() && wordsPerMs > 0.0 &&
-        ChapterTimeEstimate::formatRemainingFromRate(
+    if (SETTINGS.statusBarWantsChapterTime() && wordsPerMs > 0.0 &&
+        ReaderUtils::formatRemainingFromRate(
             section->estimateRemainingWords(static_cast<uint16_t>(section->currentPage)), wordsPerMs, chapterTimeBuf,
             sizeof(chapterTimeBuf))) {
       chapterTimeEstimate = chapterTimeBuf;
