@@ -39,9 +39,6 @@ class TxtReaderActivity final : public Activity {
 
   // Streaming text reader - stores file offsets for each page
   std::vector<size_t> pageOffsets;  // File offset for start of each page
-  // Book-wide word total for pro-rata remaining / average words-per-page credits.
-  // Avoids a per-page word table in RAM or on disk (ESP32-C3 heap + simpler cache).
-  uint32_t totalBookWords = 0;
   std::vector<TextLine> currentPageLines;
   int linesPerPage = 0;
   int viewportWidth = 0;
@@ -51,7 +48,7 @@ class TxtReaderActivity final : public Activity {
   bool pendingForceFullRefresh = false;
   bool waitingForConfirmSecondClick = false;
   unsigned long firstConfirmClickMs = 0UL;
-  // Word-rate samples: dwell on the page currently displayed.
+  // Page-rate samples: dwell on the page currently displayed.
   PageDwell pageDwell;
 
   // End-of-book next-book suggestions (upstream). Built lazily on the render
@@ -77,8 +74,6 @@ class TxtReaderActivity final : public Activity {
   void buildPageIndex();
   bool loadPageIndexCache();
   void savePageIndexCache();
-  uint32_t estimateRemainingWords(int fromPage) const;
-  uint32_t averageWordsPerPage() const;
   void saveProgress() const;
   void loadProgress();
   bool skipPages(int amount);
@@ -94,7 +89,6 @@ class TxtReaderActivity final : public Activity {
   void maybeCreditPageWords(int page);
   void resumeAfterSubactivity();
   void openReaderSubactivity(std::unique_ptr<Activity>&& activity, ActivityResultHandler onResult);
-  uint32_t countWordsInLines(const std::vector<TextLine>& lines) const;
   std::string moveCompletedBookIfEnabled();
   void exitReaderAfterOptionalCompletedMove();
   void finishBookAndExit();

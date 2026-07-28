@@ -33,7 +33,7 @@ namespace {
 constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
 // Cache file magic and version
 constexpr uint32_t CACHE_MAGIC = 0x54585449;  // "TXTI"
-constexpr uint8_t CACHE_VERSION = 9;  // v9: totalBookWords only (no per-page word table)
+constexpr uint8_t CACHE_VERSION = 10;  // v10: page offsets only (chapter ETA uses page-rate)
 constexpr uint8_t MARKDOWN_QUOTE_INDENT = 1;
 constexpr uint8_t MARKDOWN_LIST_INDENT = 1;
 
@@ -346,7 +346,6 @@ void TxtReaderActivity::onExit() {
   ACHIEVEMENTS.recordSessionEnded(READING_STATS.getLastSessionSnapshot());
   txt.reset();
   decltype(pageOffsets)().swap(pageOffsets);
-  totalBookWords = 0;
   decltype(currentPageLines)().swap(currentPageLines);
   endOfBookOptions.reset();
   endOfBookOptionsReady.store(false, std::memory_order_release);
@@ -540,7 +539,6 @@ void TxtReaderActivity::toggleTemporaryStatusBar() {
   // which invalidates pageOffsets and the on-disk word table (different page breaks).
   initialized = false;
   pageOffsets.clear();
-  totalBookWords = 0;
   currentPageLines.clear();
   pageDwell.clear();
   pendingForceFullRefresh = true;
@@ -622,7 +620,6 @@ void TxtReaderActivity::initializeReader() {
 
 void TxtReaderActivity::buildPageIndex() {
   pageOffsets.clear();
-  totalBookWords = 0;
   pageOffsets.push_back(0);  // First page starts at offset 0
 
   size_t offset = 0;
@@ -642,9 +639,7 @@ void TxtReaderActivity::buildPageIndex() {
       break;
     }
 
-    totalBookWords += countWordsInLines(tempLines);
-
-    if (nextOffset <= offset) {
+      if (nextOffset <= offset) {
       // No progress made, avoid infinite loop
       break;
     }
@@ -661,28 +656,8 @@ void TxtReaderActivity::buildPageIndex() {
   }
 
   totalPages = pageOffsets.size();
-  LOG_DBG("TRS", "Built page index: %d pages, %lu words", totalPages, static_cast<unsigned long>(totalBookWords));
+  LOG_DBG("TRS", "Built page index: %d pages", totalPages);
   savePageIndexCache();
-}
-
-uint32_t TxtReaderActivity::countWordsInLines(const std::vector<TextLine>& lines) const {
-  // Simple whitespace tokenization is enough for TXT pro-rata / average credits.
-  // EPUB keeps layout-token counts; cross-format rates are intentionally coarse.
-  uint32_t words = 0;
-  for (const auto& line : lines) {
-    bool inWord = false;
-    for (const unsigned char c : line.text) {
-      if (c == ' ' || c == '	' || c == '
-' || c == '
-') {
-        inWord = false;
-      } else if (!inWord) {
-        inWord = true;
-        ++words;
-      }
-    }
-  }
-  return words;
 }
 
 void TxtReaderActivity::creditCurrentPageWords() {
@@ -695,31 +670,15 @@ void TxtReaderActivity::maybeCreditPageWords(const int page) {
     return;
   }
 
-  const uint32_t words = averageWordsPerPage();
-  const uint32_t associatedMs = pageDwell.takeCredit(page, 0, words, millis());
+  constexpr uint32_t kPages = 1;
+  const uint32_t associatedMs = pageDwell.takeCredit(page, 0, kPages, millis());
   if (associatedMs == 0) {
     return;
   }
 
-  READING_STATS.noteWordsRead(words, associatedMs);
+  READING_STATS.notePagesRead(kPages, associatedMs);
 }
 
-uint32_t TxtReaderActivity::averageWordsPerPage() const {
-  if (totalPages <= 0 || totalBookWords == 0) {
-    return 0;
-  }
-  return totalBookWords / static_cast<uint32_t>(totalPages);
-}
-
-uint32_t TxtReaderActivity::estimateRemainingWords(const int fromPage) const {
-  if (fromPage < 0 || totalPages <= 0 || fromPage >= totalPages || totalBookWords == 0) {
-    return 0;
-  }
-  // Pro-rate the book total across remaining pages (inclusive of fromPage).
-  const uint32_t pagesLeft = static_cast<uint32_t>(totalPages - fromPage);
-  return static_cast<uint32_t>((static_cast<uint64_t>(totalBookWords) * pagesLeft) /
-                               static_cast<uint32_t>(totalPages));
-}
 
 
 void TxtReaderActivity::resumeAfterSubactivity() {
@@ -1058,10 +1017,11 @@ void TxtReaderActivity::renderStatusBar() const {
   // Sized for multi-byte unit suffixes; formatCompactDuration fails closed if still too small.
   char chapterTimeBuf[24] = {};
   const char* chapterTimeEstimate = nullptr;
-  const double wordsPerMs = READING_STATS.getEffectiveWordsPerMs();
-  if (SETTINGS.statusBarWantsChapterTime() && wordsPerMs > 0.0 &&
-      ReaderUtils::formatRemainingFromRate(estimateRemainingWords(currentPage), wordsPerMs, chapterTimeBuf,
-                                                   sizeof(chapterTimeBuf))) {
+  const double pagesPerMs = READING_STATS.getEffectivePagesPerMs();
+  const uint32_t remainingPages =
+      (currentPage >= 0 && totalPages > currentPage) ? static_cast<uint32_t>(totalPages - currentPage) : 0;
+  if (SETTINGS.statusBarWantsChapterTime() && pagesPerMs > 0.0 &&
+      ReaderUtils::formatRemainingFromRate(remainingPages, pagesPerMs, chapterTimeBuf, sizeof(chapterTimeBuf))) {
     chapterTimeEstimate = chapterTimeBuf;
   }
 
@@ -1132,7 +1092,6 @@ bool TxtReaderActivity::loadPageIndexCache() {
   // - uint8_t: paragraph alignment
   // - uint32_t: total pages count
   // - N * uint32_t: page offsets
-  // - uint32_t: totalBookWords
 
   std::string cachePath = txt->getCachePath() + "/index.bin";
   HalFile f;
@@ -1201,7 +1160,6 @@ bool TxtReaderActivity::loadPageIndexCache() {
   serialization::readPod(f, numPages);
 
   pageOffsets.clear();
-  totalBookWords = 0;
   pageOffsets.reserve(numPages);
 
   for (uint32_t i = 0; i < numPages; i++) {
@@ -1209,11 +1167,9 @@ bool TxtReaderActivity::loadPageIndexCache() {
     serialization::readPod(f, offset);
     pageOffsets.push_back(offset);
   }
-  serialization::readPod(f, totalBookWords);
 
   totalPages = pageOffsets.size();
-  LOG_DBG("TRS", "Loaded page index cache: %d pages, %lu words", totalPages,
-          static_cast<unsigned long>(totalBookWords));
+  LOG_DBG("TRS", "Loaded page index cache: %d pages", totalPages);
   return true;
 }
 
@@ -1238,7 +1194,6 @@ void TxtReaderActivity::savePageIndexCache() {
   for (size_t offset : pageOffsets) {
     serialization::writePod(f, static_cast<uint32_t>(offset));
   }
-  serialization::writePod(f, totalBookWords);
 
   LOG_DBG("TRS", "Saved page index cache: %d pages", totalPages);
 }

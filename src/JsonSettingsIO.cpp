@@ -1731,10 +1731,10 @@ bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char
     writer.value(book.chapterTitle);
     writer.literal(",\"totalReadingMs\":");
     writer.value(book.totalReadingMs);
-    writer.literal(",\"totalWordsReadingMs\":");
-    writer.value(book.totalWordsReadingMs);
-    writer.literal(",\"totalWordsRead\":");
-    writer.value(book.totalWordsRead);
+    writer.literal(",\"totalPagesReadingMs\":");
+    writer.value(book.totalPagesReadingMs);
+    writer.literal(",\"totalPagesRead\":");
+    writer.value(book.totalPagesRead);
     writer.literal(",\"sessions\":");
     writer.value(book.sessions);
     writer.literal(",\"lastSessionMs\":");
@@ -1920,8 +1920,8 @@ bool JsonSettingsIO::loadReadingStatsDocument(ReadingStatsStore& store, const Js
     book.coverBmpPath = obj["coverBmpPath"] | std::string("");
     book.chapterTitle = obj["chapterTitle"] | std::string("");
     book.totalReadingMs = obj["totalReadingMs"] | static_cast<uint64_t>(0);
-    book.totalWordsReadingMs = obj["totalWordsReadingMs"] | static_cast<uint64_t>(0);
-    book.totalWordsRead = obj["totalWordsRead"] | static_cast<uint64_t>(0);
+    book.totalPagesReadingMs = obj["totalPagesReadingMs"] | static_cast<uint64_t>(0);
+    book.totalPagesRead = obj["totalPagesRead"] | static_cast<uint64_t>(0);
     book.sessions = obj["sessions"] | static_cast<uint32_t>(0);
     book.lastSessionMs = obj["lastSessionMs"] | static_cast<uint32_t>(0);
     book.firstReadAt = obj["firstReadAt"] | static_cast<uint32_t>(0);
