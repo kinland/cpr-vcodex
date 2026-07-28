@@ -235,6 +235,7 @@ bool Section::loadSectionFile(const ReaderRenderSpec& spec) {
 
   // Load per-page word counts (v54+) from immediately after the visible-text LUT.
   pageWordCounts_.clear();
+  knownPageWordsTotal_ = 0;
   if (pageCount > 0) {
     uint32_t visibleLutOffset = 0;
     file.seek(HEADER_SIZE - sizeof(uint32_t));
@@ -247,6 +248,7 @@ bool Section::loadSectionFile(const ReaderRenderSpec& spec) {
       for (uint16_t i = 0; i < pageCount; ++i) {
         serialization::readPod(file, pageWordCounts_[i]);
       }
+      recomputeKnownPageWordsTotal();
     } else {
       file.close();
       LOG_ERR("SCT", "Deserialization failed: missing page word counts");
@@ -466,7 +468,10 @@ bool Section::startBuild(const ReaderRenderSpec& spec, const std::function<void(
         if (pageWordCounts_.size() < ctxPtr->lut.size()) {
           pageWordCounts_.resize(ctxPtr->lut.size());
         }
-        pageWordCounts_[ctxPtr->lut.size() - 1] = wordCount;
+        const size_t wordIndex = ctxPtr->lut.size() - 1;
+        const uint16_t previousWords = pageWordCounts_[wordIndex];
+        pageWordCounts_[wordIndex] = wordCount;
+        knownPageWordsTotal_ = knownPageWordsTotal_ - previousWords + wordCount;
       },
       spec.embeddedStyle, ctxPtr->contentBase, ctxPtr->imageBasePath, spec.imageRendering, std::move(tocAnchors),
       popupFn, ctxPtr->cssParser);
@@ -764,6 +769,14 @@ void Section::syncPageWordCountsToReadablePages() {
   } else if (pageWordCounts_.size() > pageCount) {
     pageWordCounts_.resize(pageCount);
   }
+  recomputeKnownPageWordsTotal();
+}
+
+void Section::recomputeKnownPageWordsTotal() {
+  knownPageWordsTotal_ = 0;
+  for (const uint16_t words : pageWordCounts_) {
+    knownPageWordsTotal_ += words;
+  }
 }
 
 void Section::abandonBuild() {
@@ -790,6 +803,7 @@ void Section::abandonBuild() {
   pageCount = 0;
   builtPageCount_ = 0;
   pageWordCounts_.clear();
+  knownPageWordsTotal_ = 0;
 }
 
 std::unique_ptr<Page> Section::loadPageDuringBuild(const int page) {
@@ -1191,19 +1205,15 @@ uint16_t Section::getPageWordCount(const uint16_t page) const {
 uint32_t Section::estimateRemainingWords(const uint16_t fromPage) const {
   const uint16_t availablePages = pageCount;
   uint32_t remaining = 0;
-  uint32_t knownWords = 0;
-  for (uint16_t page = 0; page < availablePages; ++page) {
-    const uint16_t words = getPageWordCount(page);
-    knownWords += words;
-    if (page >= fromPage) {
-      remaining += words;
-    }
+  for (uint16_t page = fromPage; page < availablePages; ++page) {
+    remaining += getPageWordCount(page);
   }
 
   // Extrapolate unbuilt pages using the same estimatedTotalPages() the status-bar
   // page denominator uses (partial watermark / rebuild EMA), so pages and time agree.
   // Remaining includes fromPage: the reader is still on that page, so its words are unread.
   const uint16_t estimatedTotal = estimatedTotalPages();
+  const uint32_t knownWords = knownPageWordsTotal_;
   if (knownWords > 0 && estimatedTotal > availablePages && availablePages > 0) {
     const uint64_t unbuiltPages = static_cast<uint64_t>(estimatedTotal - availablePages);
     const uint64_t unbuiltWords =

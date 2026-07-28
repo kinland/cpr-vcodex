@@ -102,37 +102,24 @@ void applyStatusBarClockMode(const uint8_t newMode) {
   }
 }
 
-const char* previewChapterTimeEstimate() {
+bool fillPreviewChapterTimeEstimate(char* buf, const size_t bufSize) {
   switch (SETTINGS.statusBarChapterProgress) {
     case CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME:
     case CrossPointSettings::CHAPTER_PROGRESS_TIME: {
-      // static: pointer must outlive this function; only consumed in the same
-      // render call stack by drawStatusBar. Sized like reader chapterTimeBuf.
-      static char buf[24];
-      snprintf(buf, sizeof(buf), "15%s", tr(STR_ETA_UNIT_MINUTE));
-      return buf;
+      const int written = snprintf(buf, bufSize, "15%s", tr(STR_ETA_UNIT_MINUTE));
+      return written > 0 && static_cast<size_t>(written) < bufSize;
     }
     default:
-      return nullptr;
+      return false;
   }
 }
 
 std::string chapterProgressLabel(const uint8_t mode) {
-  switch (mode) {
-    case CrossPointSettings::CHAPTER_PROGRESS_PAGES:
-      return tr(STR_PAGES);
-    case CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME: {
-      char buf[64];
-      if (ChapterTimeEstimate::formatPagesPlusTime(buf, sizeof(buf))) {
-        return buf;
-      }
-      return tr(STR_PAGES);
-    }
-    case CrossPointSettings::CHAPTER_PROGRESS_TIME:
-      return tr(STR_TIME);
-    default:
-      return tr(STR_HIDE);
+  char buf[64];
+  if (ChapterTimeEstimate::formatChapterProgressLabel(mode, buf, sizeof(buf))) {
+    return buf;
   }
+  return tr(STR_HIDE);
 }
 
 const int verticalPreviewTextPadding = 40;
@@ -341,8 +328,13 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
   }
 
   // Anchor the preview as a footer directly above the button hints.
+  char previewChapterTimeBuf[24] = {};
+  const char* previewChapterTime = nullptr;
+  if (fillPreviewChapterTimeEstimate(previewChapterTimeBuf, sizeof(previewChapterTimeBuf))) {
+    previewChapterTime = previewChapterTimeBuf;
+  }
   GUI.drawStatusBar(renderer, 75, 8, 32, title, metrics.buttonHintsHeight, 0, false, false, false,
-                    previewChapterTimeEstimate());
+                    previewChapterTime);
 
   renderer.drawCenteredText(UI_10_FONT_ID,
                             renderer.getScreenHeight() - UITheme::getInstance().getStatusBarHeight() -
