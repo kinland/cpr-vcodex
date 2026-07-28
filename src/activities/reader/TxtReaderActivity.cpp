@@ -339,7 +339,7 @@ void TxtReaderActivity::onExit() {
   // Credit if this path did not already (early exits credit before endSession).
   // endSession is idempotent: a second call keeps lastSessionSnapshot for the
   // post-read stats banner. recordSessionEnded dedupes by snapshot serial.
-  creditCurrentPageWords();
+  creditCurrentPage();
 
   APP_STATE.readerActivityLoadCount = 0;
   READING_STATS.endSession();
@@ -413,7 +413,7 @@ bool TxtReaderActivity::handleBackNavigation() {
       mappedInput.wasReleased(MappedInputManager::Button::Back);
   if (!backTriggered) return false;
 
-  creditCurrentPageWords();
+  creditCurrentPage();
   const bool longPress = mappedInput.getHeldTime() >= ReaderUtils::GO_BACK_OR_HOME_MS;
   if (longPress != static_cast<bool>(SETTINGS.backShortToFileBrowser)) {
     // File browser, starting in the book's folder (after an optional completed-book move).
@@ -470,7 +470,7 @@ void TxtReaderActivity::loop() {
     // The suggestion menu (when shown) already consumed its input above.
     if (endOfBookMenuActive()) return;
     if (nextTriggered) {
-      creditCurrentPageWords();
+      creditCurrentPage();
       finishBookAndExit();
     } else {
       pageDwell.clear();
@@ -498,7 +498,7 @@ void TxtReaderActivity::loop() {
     if (skip) {
       pageDwell.clear();
     } else {
-      maybeCreditPageWords(currentPage);
+      maybeCreditPage(currentPage);
     }
     if (skipPages(amount)) {
       READING_STATS.noteActivity();
@@ -574,7 +574,7 @@ std::string TxtReaderActivity::moveCompletedBookIfEnabled() {
 }
 
 void TxtReaderActivity::exitReaderAfterOptionalCompletedMove() {
-  creditCurrentPageWords();
+  creditCurrentPage();
   const std::string exitPath = moveCompletedBookIfEnabled();
   exitReaderToHomeOrStats(renderer, mappedInput, exitPath);
 }
@@ -660,12 +660,12 @@ void TxtReaderActivity::buildPageIndex() {
   savePageIndexCache();
 }
 
-void TxtReaderActivity::creditCurrentPageWords() {
-  maybeCreditPageWords(currentPage);
+void TxtReaderActivity::creditCurrentPage() {
+  maybeCreditPage(currentPage);
   pageDwell.clear();
 }
 
-void TxtReaderActivity::maybeCreditPageWords(const int page) {
+void TxtReaderActivity::maybeCreditPage(const int page) {
   if (page < 0) {
     return;
   }
@@ -1173,7 +1173,7 @@ bool TxtReaderActivity::loadPageIndexCache() {
   return true;
 }
 
-void TxtReaderActivity::savePageIndexCache() {
+void TxtReaderActivity::savePageIndexCache() const {
   std::string cachePath = txt->getCachePath() + "/index.bin";
   HalFile f;
   if (!Storage.openFileForWrite("TRS", cachePath, f)) {

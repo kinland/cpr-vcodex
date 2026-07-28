@@ -400,7 +400,7 @@ void EpubReaderActivity::onExit() {
   // Credit if this path did not already (early exits credit before endSession).
   // endSession is idempotent: a second call keeps lastSessionSnapshot for the
   // post-read stats banner. recordSessionEnded dedupes by snapshot serial.
-  creditCurrentPageWords();
+  creditCurrentPage();
 
   APP_STATE.readerActivityLoadCount = 0;
   READING_STATS.endSession();
@@ -555,7 +555,7 @@ bool EpubReaderActivity::handleBackNavigation() {
     return true;
   }
 
-  creditCurrentPageWords();
+  creditCurrentPage();
   if (longPress != static_cast<bool>(SETTINGS.backShortToFileBrowser)) {
     const std::string fileBrowserPath = moveCompletedBookIfEnabled();
     READING_STATS.endSession();
@@ -1843,7 +1843,7 @@ std::string EpubReaderActivity::moveCompletedBookIfEnabled() {
 }
 
 void EpubReaderActivity::exitReaderAfterOptionalCompletedMove() {
-  creditCurrentPageWords();
+  creditCurrentPage();
   const std::string exitPath = moveCompletedBookIfEnabled();
   exitReaderToHomeOrStats(renderer, mappedInput, exitPath);
 }
@@ -1877,14 +1877,14 @@ void EpubReaderActivity::openReaderSubactivity(std::unique_ptr<Activity>&& activ
   });
 }
 
-void EpubReaderActivity::creditCurrentPageWords() {
+void EpubReaderActivity::creditCurrentPage() {
   if (!automaticPageTurnActive && section && section->currentPage >= 0) {
-    maybeCreditPageWords(currentSpineIndex, section->currentPage);
+    maybeCreditPage(currentSpineIndex, section->currentPage);
   }
   pageDwell.clear();
 }
 
-void EpubReaderActivity::maybeCreditPageWords(const int spineIndex, const int page) {
+void EpubReaderActivity::maybeCreditPage(const int spineIndex, const int page) {
   if (!section || page < 0 || spineIndex < 0) {
     return;
   }
@@ -1920,7 +1920,7 @@ void EpubReaderActivity::pageTurn(bool isForwardTurn) {
   if (isForwardTurn) {
     // Auto page-turn must not train the reading-rate samples.
     if (!automaticPageTurnActive) {
-      maybeCreditPageWords(oldSpineIndex, oldPage);
+      maybeCreditPage(oldSpineIndex, oldPage);
     }
     if (section->currentPage < section->pageCount - 1 || section->isBuilding() || section->isPartial()) {
       section->currentPage++;
@@ -3854,7 +3854,7 @@ void EpubReaderActivity::launchKOReaderSync(const SyncLaunchMode mode) {
     invalidateCurrentOverlayPageCache();
     discardOverlayPage();
     // Credit before releasing the section — onExit cannot credit after section.reset().
-    creditCurrentPageWords();
+    creditCurrentPage();
     section.reset();
     ImageBlock::setExtractor(nullptr, nullptr);
     pluginSession.exit(epub->getPath());

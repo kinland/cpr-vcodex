@@ -44,7 +44,8 @@ namespace {
 // v53: upstream spacing, indentation and paragraph continuity, retaining fork
 //      table fragments, ruby storage and highlight layout flags.
 // v54: per-page word counts appended after the visible-text LUT (chapter ETA).
-// v55: drop per-page word counts; chapter ETA uses page-rate samples instead.
+// v55: drop the transient v54 per-page word LUT; chapter ETA uses page-rate samples
+//      (no word table). Master's visible-text LUT layout from v53+ is unchanged.
 constexpr uint8_t SECTION_FILE_VERSION = 55;
 // Written into the version field while a build is in progress; patched to
 // SECTION_FILE_VERSION only when the build is finalized. An abandoned /
