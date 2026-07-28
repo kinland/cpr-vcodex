@@ -1070,7 +1070,8 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
 
   const bool showChapterPages = sb.showChapterPageCount;
   const bool showBookPercent = sb.showBookProgressPercent;
-  const bool showChapterTime = chapterTimeEstimate != nullptr && chapterTimeEstimate[0] != '\0';
+  const bool showChapterTime =
+      sb.showChapterTimeRemaining && chapterTimeEstimate != nullptr && chapterTimeEstimate[0] != '\0';
 
   if (showBookPercent || showChapterPages || showChapterTime) {
     // Right aligned text for progress counter
