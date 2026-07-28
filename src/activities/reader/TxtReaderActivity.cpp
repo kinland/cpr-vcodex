@@ -27,13 +27,14 @@
 #include "fontIds.h"
 #include "util/AchievementPopupUtils.h"
 #include "util/BookIdentity.h"
+#include "util/ChapterTimeEstimate.h"
 #include "util/CompletedBookMover.h"
 
 namespace {
 constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
 // Cache file magic and version
 constexpr uint32_t CACHE_MAGIC = 0x54585449;  // "TXTI"
-constexpr uint8_t CACHE_VERSION = 4;          // Increment when cache format changes
+constexpr uint8_t CACHE_VERSION = 5;          // v5: per-page word counts for chapter ETA
 constexpr uint8_t MARKDOWN_QUOTE_INDENT = 1;
 constexpr uint8_t MARKDOWN_LIST_INDENT = 1;
 
@@ -335,11 +336,14 @@ void TxtReaderActivity::onExit() {
   // Reset orientation back to portrait for the rest of the UI
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
 
+  maybeCreditPageWords(currentPage);
+
   APP_STATE.readerActivityLoadCount = 0;
   READING_STATS.endSession();
   ACHIEVEMENTS.recordSessionEnded(READING_STATS.getLastSessionSnapshot());
   txt.reset();
   decltype(pageOffsets)().swap(pageOffsets);
+  decltype(pageWordCounts)().swap(pageWordCounts);
   decltype(currentPageLines)().swap(currentPageLines);
   endOfBookOptions.reset();
   endOfBookOptionsReady.store(false, std::memory_order_release);
@@ -463,8 +467,11 @@ void TxtReaderActivity::loop() {
     // The suggestion menu (when shown) already consumed its input above.
     if (endOfBookMenuActive()) return;
     if (nextTriggered) {
+      maybeCreditPageWords(currentPage);
       finishBookAndExit();
     } else {
+      pageEnteredPage = -1;
+      pageEnteredMs = 0;
       returnFromEndOfBook();
       requestUpdate();
     }
@@ -479,11 +486,20 @@ void TxtReaderActivity::loop() {
   const int previousPage = currentPage;
 
   if (prevTriggered) {
+    // Backward turns / skips never credit; re-reads credit later if the reader lingers.
+    pageEnteredPage = -1;
+    pageEnteredMs = 0;
     if (skipPages(-amount)) {
       READING_STATS.noteActivity();
       requestUpdate();
     }
   } else if (nextTriggered) {
+    if (skip) {
+      pageEnteredPage = -1;
+      pageEnteredMs = 0;
+    } else {
+      maybeCreditPageWords(currentPage);
+    }
     if (skipPages(amount)) {
       READING_STATS.noteActivity();
       requestUpdate();
@@ -521,7 +537,10 @@ void TxtReaderActivity::toggleTemporaryStatusBar() {
   statusBarTemporarilyHidden = !statusBarTemporarilyHidden;
   initialized = false;
   pageOffsets.clear();
+  pageWordCounts.clear();
   currentPageLines.clear();
+  pageEnteredPage = -1;
+  pageEnteredMs = 0;
   pendingForceFullRefresh = true;
   requestUpdate();
 }
@@ -603,6 +622,7 @@ void TxtReaderActivity::initializeReader() {
 
 void TxtReaderActivity::buildPageIndex() {
   pageOffsets.clear();
+  pageWordCounts.clear();
   pageOffsets.push_back(0);  // First page starts at offset 0
 
   size_t offset = 0;
@@ -622,6 +642,8 @@ void TxtReaderActivity::buildPageIndex() {
       break;
     }
 
+    pageWordCounts.push_back(countWordsInLines(tempLines));
+
     if (nextOffset <= offset) {
       // No progress made, avoid infinite loop
       break;
@@ -639,7 +661,83 @@ void TxtReaderActivity::buildPageIndex() {
   }
 
   totalPages = pageOffsets.size();
+  if (pageWordCounts.size() > static_cast<size_t>(totalPages)) {
+    pageWordCounts.resize(totalPages);
+  }
+  while (pageWordCounts.size() < static_cast<size_t>(totalPages)) {
+    pageWordCounts.push_back(0);
+  }
   LOG_DBG("TRS", "Built page index: %d pages", totalPages);
+}
+
+uint16_t TxtReaderActivity::countWordsInLines(const std::vector<TextLine>& lines) {
+  uint32_t words = 0;
+  for (const auto& line : lines) {
+    bool inWord = false;
+    for (const unsigned char c : line.text) {
+      const bool isSpace = c <= ' ' || c == 0xA0;
+      if (!isSpace && !inWord) {
+        ++words;
+        inWord = true;
+      } else if (isSpace) {
+        inWord = false;
+      }
+    }
+  }
+  return words > UINT16_MAX ? UINT16_MAX : static_cast<uint16_t>(words);
+}
+
+void TxtReaderActivity::notePageEnteredIfChanged() {
+  if (currentPage < 0) {
+    return;
+  }
+  if (currentPage == pageEnteredPage && pageEnteredMs != 0) {
+    return;
+  }
+  pageEnteredPage = currentPage;
+  pageEnteredMs = millis();
+}
+
+void TxtReaderActivity::maybeCreditPageWords(const int page) {
+  if (page < 0 || pageEnteredPage != page || pageEnteredMs == 0) {
+    return;
+  }
+
+  constexpr unsigned long WORD_CREDIT_MIN_DWELL_MS = 1500UL;
+  constexpr unsigned long WORD_CREDIT_REREAD_MIN_MS = 8000UL;
+  constexpr unsigned long WORD_CREDIT_MAX_DWELL_MS = 30UL * 60UL * 1000UL;
+
+  const unsigned long dwellMs = millis() - pageEnteredMs;
+  if (dwellMs < WORD_CREDIT_MIN_DWELL_MS) {
+    return;
+  }
+  if (page == lastWordsCreditedPage && dwellMs < WORD_CREDIT_REREAD_MIN_MS) {
+    return;
+  }
+
+  uint16_t words = 0;
+  if (page < static_cast<int>(pageWordCounts.size())) {
+    words = pageWordCounts[page];
+  }
+  lastWordsCreditedPage = page;
+  if (words == 0) {
+    return;
+  }
+
+  const uint32_t associatedMs = static_cast<uint32_t>(
+      dwellMs > WORD_CREDIT_MAX_DWELL_MS ? WORD_CREDIT_MAX_DWELL_MS : dwellMs);
+  READING_STATS.noteWordsRead(words, associatedMs);
+}
+
+uint32_t TxtReaderActivity::estimateRemainingWords(const int fromPage) const {
+  if (fromPage < 0 || pageWordCounts.empty()) {
+    return 0;
+  }
+  uint32_t remaining = 0;
+  for (size_t page = static_cast<size_t>(fromPage); page < pageWordCounts.size(); ++page) {
+    remaining += pageWordCounts[page];
+  }
+  return remaining;
 }
 
 bool TxtReaderActivity::loadPageAtOffset(size_t offset, std::vector<TextLine>& outLines, size_t& nextOffset) {
@@ -928,6 +1026,7 @@ void TxtReaderActivity::renderPage() {
 
   // BW rendering
   renderLines();
+  notePageEnteredIfChanged();
   renderStatusBar();
 
   const bool forceFullRefresh = pendingForceFullRefresh;
@@ -954,7 +1053,23 @@ void TxtReaderActivity::renderStatusBar() const {
   if (SETTINGS.statusBarSpec().showsTitle()) {
     title = txt->getTitle();
   }
-  GUI.drawStatusBar(renderer, progress, currentPage + 1, totalPages, title);
+
+  char chapterTimeBuf[12] = {};
+  const char* chapterTimeEstimate = nullptr;
+  if (SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME ||
+      SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_TIME) {
+    const double wordsPerMs = READING_STATS.getEffectiveWordsPerMs();
+    if (wordsPerMs > 0.0) {
+      const uint32_t remainingWords = estimateRemainingWords(currentPage);
+      if (ChapterTimeEstimate::formatRemainingFromRate(remainingWords, wordsPerMs, chapterTimeBuf,
+                                                       sizeof(chapterTimeBuf))) {
+        chapterTimeEstimate = chapterTimeBuf;
+      }
+    }
+  }
+
+  GUI.drawStatusBar(renderer, progress, currentPage + 1, totalPages, title, 0, 0, true, false, false,
+                    chapterTimeEstimate);
 }
 
 void TxtReaderActivity::saveProgress() const {
@@ -1020,6 +1135,7 @@ bool TxtReaderActivity::loadPageIndexCache() {
   // - uint8_t: paragraph alignment (to invalidate cache on alignment change)
   // - uint32_t: total pages count
   // - N * uint32_t: page offsets
+  // - N * uint16_t: page word counts (v5+)
 
   std::string cachePath = txt->getCachePath() + "/index.bin";
   HalFile f;
@@ -1090,12 +1206,19 @@ bool TxtReaderActivity::loadPageIndexCache() {
 
   // Read page offsets
   pageOffsets.clear();
+  pageWordCounts.clear();
   pageOffsets.reserve(numPages);
+  pageWordCounts.reserve(numPages);
 
   for (uint32_t i = 0; i < numPages; i++) {
     uint32_t offset;
     serialization::readPod(f, offset);
     pageOffsets.push_back(offset);
+  }
+  for (uint32_t i = 0; i < numPages; i++) {
+    uint16_t words = 0;
+    serialization::readPod(f, words);
+    pageWordCounts.push_back(words);
   }
 
   totalPages = pageOffsets.size();
@@ -1125,6 +1248,10 @@ void TxtReaderActivity::savePageIndexCache() const {
   // Write page offsets
   for (size_t offset : pageOffsets) {
     serialization::writePod(f, static_cast<uint32_t>(offset));
+  }
+  for (size_t i = 0; i < pageOffsets.size(); ++i) {
+    const uint16_t words = (i < pageWordCounts.size()) ? pageWordCounts[i] : 0;
+    serialization::writePod(f, words);
   }
 
   LOG_DBG("TRS", "Saved page index cache: %d pages", totalPages);

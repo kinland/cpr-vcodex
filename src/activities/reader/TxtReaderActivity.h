@@ -38,6 +38,7 @@ class TxtReaderActivity final : public Activity {
 
   // Streaming text reader - stores file offsets for each page
   std::vector<size_t> pageOffsets;  // File offset for start of each page
+  std::vector<uint16_t> pageWordCounts;  // Words per page (parallel to pageOffsets)
   std::vector<TextLine> currentPageLines;
   int linesPerPage = 0;
   int viewportWidth = 0;
@@ -47,6 +48,10 @@ class TxtReaderActivity final : public Activity {
   bool pendingForceFullRefresh = false;
   bool waitingForConfirmSecondClick = false;
   unsigned long firstConfirmClickMs = 0UL;
+  // Word-rate samples: dwell on the page currently displayed.
+  unsigned long pageEnteredMs = 0;
+  int pageEnteredPage = -1;
+  int lastWordsCreditedPage = -1;
 
   // End-of-book next-book suggestions (upstream). Built lazily on the render
   // task; the ready flag is the release/acquire publication point for loop().
@@ -82,9 +87,13 @@ class TxtReaderActivity final : public Activity {
   bool handleBackNavigation();
   void requestCurrentPageFullRefresh();
   void toggleTemporaryStatusBar();
+  void notePageEnteredIfChanged();
+  void maybeCreditPageWords(int page);
+  uint32_t estimateRemainingWords(int fromPage) const;
   std::string moveCompletedBookIfEnabled();
   void exitReaderAfterOptionalCompletedMove();
   void finishBookAndExit();
+  static uint16_t countWordsInLines(const std::vector<TextLine>& lines);
 
  public:
   explicit TxtReaderActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::unique_ptr<Txt> txt,
