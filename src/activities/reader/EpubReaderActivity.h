@@ -81,6 +81,9 @@ class EpubReaderActivity final : public Activity {
   int idlePrewarmSpine = -1;
   int idlePrewarmPage = -1;
   unsigned long lastRenderCompleteMs = 0;
+  // High-water mark for word-rate credits so back/forward re-reads do not inflate ETA.
+  int wordsCreditedSpineIndex = -1;
+  int wordsCreditedPage = -1;
   std::shared_ptr<Page> currentOverlayPageCache;
   int currentOverlayPageSpineIndex = -1;
   int currentOverlayPageNumber = -1;
