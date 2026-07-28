@@ -389,6 +389,7 @@ void applyLegacyStatusBarSettings(CrossPointSettings& settings) {
   switch (static_cast<CrossPointSettings::STATUS_BAR_MODE>(settings.statusBar)) {
     case CrossPointSettings::NONE:
       settings.statusBarChapterPageCount = 0;
+      settings.statusBarChapterTimeRemaining = 0;
       settings.statusBarBookProgressPercentage = 0;
       settings.statusBarProgressBar = CrossPointSettings::HIDE_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::HIDE_TITLE;
@@ -396,6 +397,7 @@ void applyLegacyStatusBarSettings(CrossPointSettings& settings) {
       break;
     case CrossPointSettings::NO_PROGRESS:
       settings.statusBarChapterPageCount = 0;
+      settings.statusBarChapterTimeRemaining = 0;
       settings.statusBarBookProgressPercentage = 0;
       settings.statusBarProgressBar = CrossPointSettings::HIDE_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::CHAPTER_TITLE;
@@ -403,6 +405,7 @@ void applyLegacyStatusBarSettings(CrossPointSettings& settings) {
       break;
     case CrossPointSettings::BOOK_PROGRESS_BAR:
       settings.statusBarChapterPageCount = 1;
+      settings.statusBarChapterTimeRemaining = 0;
       settings.statusBarBookProgressPercentage = 0;
       settings.statusBarProgressBar = CrossPointSettings::BOOK_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::CHAPTER_TITLE;
@@ -410,6 +413,7 @@ void applyLegacyStatusBarSettings(CrossPointSettings& settings) {
       break;
     case CrossPointSettings::ONLY_BOOK_PROGRESS_BAR:
       settings.statusBarChapterPageCount = 1;
+      settings.statusBarChapterTimeRemaining = 0;
       settings.statusBarBookProgressPercentage = 0;
       settings.statusBarProgressBar = CrossPointSettings::BOOK_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::HIDE_TITLE;
@@ -417,6 +421,7 @@ void applyLegacyStatusBarSettings(CrossPointSettings& settings) {
       break;
     case CrossPointSettings::CHAPTER_PROGRESS_BAR:
       settings.statusBarChapterPageCount = 0;
+      settings.statusBarChapterTimeRemaining = 0;
       settings.statusBarBookProgressPercentage = 1;
       settings.statusBarProgressBar = CrossPointSettings::CHAPTER_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::CHAPTER_TITLE;
@@ -425,6 +430,7 @@ void applyLegacyStatusBarSettings(CrossPointSettings& settings) {
     case CrossPointSettings::FULL:
     default:
       settings.statusBarChapterPageCount = 1;
+      settings.statusBarChapterTimeRemaining = 0;
       settings.statusBarBookProgressPercentage = 1;
       settings.statusBarProgressBar = CrossPointSettings::HIDE_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::CHAPTER_TITLE;
@@ -697,6 +703,7 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   }
 
   loadToggle("statusBarChapterPageCount", s.statusBarChapterPageCount);
+  loadToggle("statusBarChapterTimeRemaining", s.statusBarChapterTimeRemaining);
   loadToggle("statusBarBookProgressPercentage", s.statusBarBookProgressPercentage);
   loadEnum("statusBarProgressBar", s.statusBarProgressBar, CrossPointSettings::STATUS_BAR_PROGRESS_BAR_COUNT);
   loadEnum("statusBarProgressBarThickness", s.statusBarProgressBarThickness,
@@ -1160,6 +1167,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["koSyncAutoPushOnClose"] = s.koSyncAutoPushOnClose;
 
   doc["statusBarChapterPageCount"] = s.statusBarChapterPageCount;
+  doc["statusBarChapterTimeRemaining"] = s.statusBarChapterTimeRemaining;
   doc["statusBarBookProgressPercentage"] = s.statusBarBookProgressPercentage;
   doc["statusBarProgressBar"] = s.statusBarProgressBar;
   doc["statusBarProgressBarThickness"] = s.statusBarProgressBarThickness;
@@ -1716,6 +1724,8 @@ bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char
     writer.value(book.chapterTitle);
     writer.literal(",\"totalReadingMs\":");
     writer.value(book.totalReadingMs);
+    writer.literal(",\"totalWordsRead\":");
+    writer.value(book.totalWordsRead);
     writer.literal(",\"sessions\":");
     writer.value(book.sessions);
     writer.literal(",\"lastSessionMs\":");
@@ -1901,6 +1911,7 @@ bool JsonSettingsIO::loadReadingStatsDocument(ReadingStatsStore& store, const Js
     book.coverBmpPath = obj["coverBmpPath"] | std::string("");
     book.chapterTitle = obj["chapterTitle"] | std::string("");
     book.totalReadingMs = obj["totalReadingMs"] | static_cast<uint64_t>(0);
+    book.totalWordsRead = obj["totalWordsRead"] | static_cast<uint64_t>(0);
     book.sessions = obj["sessions"] | static_cast<uint32_t>(0);
     book.lastSessionMs = obj["lastSessionMs"] | static_cast<uint32_t>(0);
     book.firstReadAt = obj["firstReadAt"] | static_cast<uint32_t>(0);

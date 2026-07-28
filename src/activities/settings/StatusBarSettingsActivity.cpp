@@ -23,6 +23,7 @@ namespace {
 // setting (Settings > Apps > Time zone), so clockUtcOffsetQ is migration-only.
 enum MenuItem {
   ITEM_CHAPTER_PAGE_COUNT = 0,
+  ITEM_CHAPTER_TIME_REMAINING,
   ITEM_BOOK_PROGRESS_PERCENTAGE,
   ITEM_PROGRESS_BAR,
   ITEM_PROGRESS_BAR_THICKNESS,
@@ -42,6 +43,7 @@ static_assert(FULL_MENU_ITEMS == StatusBarSettingsActivity::MAX_STATUS_BAR_ITEMS
 
 const StrId menuNames[FULL_MENU_ITEMS] = {
     StrId::STR_CHAPTER_PAGE_COUNT,
+    StrId::STR_CHAPTER_TIME_REMAINING_ESTIMATE,
     StrId::STR_BOOK_PROGRESS_PERCENTAGE,
     StrId::STR_PROGRESS_BAR,
     StrId::STR_PROGRESS_BAR_THICKNESS,
@@ -160,6 +162,9 @@ void StatusBarSettingsActivity::handleSelection() {
     case ITEM_CHAPTER_PAGE_COUNT:
       SETTINGS.statusBarChapterPageCount = (SETTINGS.statusBarChapterPageCount + 1) % 2;
       break;
+    case ITEM_CHAPTER_TIME_REMAINING:
+      SETTINGS.statusBarChapterTimeRemaining = (SETTINGS.statusBarChapterTimeRemaining + 1) % 2;
+      break;
     case ITEM_BOOK_PROGRESS_PERCENTAGE:
       SETTINGS.statusBarBookProgressPercentage = (SETTINGS.statusBarBookProgressPercentage + 1) % 2;
       break;
@@ -258,6 +263,7 @@ void StatusBarSettingsActivity::buildScreen(UiScreen& screen) {
     rowItems_[i].value = rowValues_[i].empty() ? nullptr : rowValues_[i].c_str();
   }
   GUI.setCheckboxRow(rowItems_[ITEM_CHAPTER_PAGE_COUNT], SETTINGS.statusBarChapterPageCount);
+  GUI.setCheckboxRow(rowItems_[ITEM_CHAPTER_TIME_REMAINING], SETTINGS.statusBarChapterTimeRemaining);
   GUI.setCheckboxRow(rowItems_[ITEM_BOOK_PROGRESS_PERCENTAGE], SETTINGS.statusBarBookProgressPercentage);
   GUI.setCheckboxRow(rowItems_[ITEM_BATTERY], SETTINGS.statusBarBattery);
 
@@ -298,7 +304,8 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
   }
 
   // Anchor the preview as a footer directly above the button hints.
-  GUI.drawStatusBar(renderer, 75, 8, 32, title, metrics.buttonHintsHeight, 0, false);
+  GUI.drawStatusBar(renderer, 75, 8, 32, title, metrics.buttonHintsHeight, 0, false, false, false,
+                    SETTINGS.statusBarChapterTimeRemaining ? "15m" : nullptr);
 
   renderer.drawCenteredText(UI_10_FONT_ID,
                             renderer.getScreenHeight() - UITheme::getInstance().getStatusBarHeight() -

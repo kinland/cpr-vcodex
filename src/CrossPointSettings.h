@@ -374,6 +374,7 @@ class CrossPointSettings {
   // Status bar settings (statusBar retained for migration only)
   uint8_t statusBar = FULL;
   uint8_t statusBarChapterPageCount = 1;
+  uint8_t statusBarChapterTimeRemaining = 0;
   uint8_t statusBarBookProgressPercentage = 1;
   uint8_t statusBarProgressBar = HIDE_PROGRESS;
   uint8_t statusBarProgressBarThickness = PROGRESS_BAR_NORMAL;
@@ -647,6 +648,7 @@ class CrossPointSettings {
   // a single byte, so the worst case is one frame drawn with a mixed status bar.
   struct StatusBarSpec {
     bool showChapterPageCount = false;
+    bool showChapterTimeRemaining = false;
     bool showBookProgressPercent = false;
     uint8_t titleMode = HIDE_TITLE;  // STATUS_BAR_TITLE
     bool showBattery = false;
@@ -663,8 +665,8 @@ class CrossPointSettings {
     // Visibility of the text lane. Clock hardware presence is the caller's
     // concern: pass halClock.isAvailable(), or true for layout reservation.
     bool textLaneVisible(bool clockAvailable) const {
-      return showChapterPageCount || showBookProgressPercent || showsTitle() || showBattery ||
-             (showsClock() && clockAvailable);
+      return showChapterPageCount || showChapterTimeRemaining || showBookProgressPercent || showsTitle() ||
+             showBattery || (showsClock() && clockAvailable);
     }
   };
   StatusBarSpec statusBarSpec() const;

@@ -43,7 +43,8 @@ namespace {
 //      upstream 45) so every existing cache rebuilds once.
 // v53: upstream spacing, indentation and paragraph continuity, retaining fork
 //      table fragments, ruby storage and highlight layout flags.
-constexpr uint8_t SECTION_FILE_VERSION = 53;
+// v54: per-page word counts appended after the visible-text LUT (chapter ETA).
+constexpr uint8_t SECTION_FILE_VERSION = 54;
 // Written into the version field while a build is in progress; patched to
 // SECTION_FILE_VERSION only when the build is finalized. An abandoned /
 // crash-interrupted .bin therefore carries version 0, which loadSectionFile rejects
@@ -51,9 +52,10 @@ constexpr uint8_t SECTION_FILE_VERSION = 53;
 constexpr uint8_t SECTION_FILE_INCOMPLETE_VERSION = 0;
 // Written when a build is suspended partway (reader exited or device slept mid-build).
 // The file carries valid pages 0..pageCount-1, all LUTs, and a trailer with the parse
-// watermark (bytesConsumed, totalBytes) appended after the visible-text LUT. loadSectionFile
-// accepts it so a resume shows those pages instantly; the reader extends it by
-// rebuilding in the background. Uses the same header layout as SECTION_FILE_VERSION,
+// watermark (bytesConsumed, totalBytes) appended after the visible-text LUT and
+// per-page word-count table. loadSectionFile accepts it so a resume shows those pages
+// instantly; the reader extends it by rebuilding in the background. Uses the same
+// header layout as SECTION_FILE_VERSION,
 // so finalized files are untouched by this feature; older firmware treats the sentinel
 // as an unknown version and rebuilds, which is a safe downgrade.
 // MUST change in lockstep with SECTION_FILE_VERSION: the sentinel IS the partial's
@@ -208,11 +210,13 @@ bool Section::loadSectionFile(const ReaderRenderSpec& spec) {
 
   if (filePartial) {
     // A partial's pageCount is the watermark of a suspended build. Read the watermark
-    // trailer (appended after the visible-text LUT) so estimatedTotalPages can extrapolate.
+    // trailer (after visible-text LUT + word-count table) so estimatedTotalPages can
+    // extrapolate.
     uint32_t visibleLutOffset = 0;
     file.seek(HEADER_SIZE - sizeof(uint32_t));
     serialization::readPod(file, visibleLutOffset);
-    const uint32_t trailerOffset = visibleLutOffset + static_cast<uint32_t>(pageCount) * sizeof(uint32_t);
+    const uint32_t trailerOffset = visibleLutOffset + static_cast<uint32_t>(pageCount) * sizeof(uint32_t) +
+                                   static_cast<uint32_t>(pageCount) * sizeof(uint16_t);
     const bool trailerValid =
         pageCount > 0 && visibleLutOffset >= HEADER_SIZE && trailerOffset + 2 * sizeof(uint32_t) <= file.size();
     if (!trailerValid) {
@@ -227,6 +231,23 @@ bool Section::loadSectionFile(const ReaderRenderSpec& spec) {
     serialization::readPod(file, partialTotalBytes_);
     partial_ = true;
     partialPageCount_ = pageCount;
+  }
+
+  // Load per-page word counts (v54+) from immediately after the visible-text LUT.
+  pageWordCounts_.clear();
+  if (pageCount > 0) {
+    uint32_t visibleLutOffset = 0;
+    file.seek(HEADER_SIZE - sizeof(uint32_t));
+    serialization::readPod(file, visibleLutOffset);
+    const uint32_t wordLutOffset = visibleLutOffset + static_cast<uint32_t>(pageCount) * sizeof(uint32_t);
+    const uint32_t wordLutEnd = wordLutOffset + static_cast<uint32_t>(pageCount) * sizeof(uint16_t);
+    if (visibleLutOffset >= HEADER_SIZE && wordLutEnd <= file.size()) {
+      pageWordCounts_.resize(pageCount);
+      file.seek(wordLutOffset);
+      for (uint16_t i = 0; i < pageCount; ++i) {
+        serialization::readPod(file, pageWordCounts_[i]);
+      }
+    }
   }
 
   // Explicit close() required: member variable persists beyond function scope
@@ -280,6 +301,11 @@ bool Section::startBuild(const ReaderRenderSpec& spec, const std::function<void(
   // Pages from a loaded partial stay readable (from filePath) while this build writes
   // to the tmp .bin, so availability never drops below the partial's watermark.
   pageCount = partial_ ? partialPageCount_ : 0;
+  if (!partial_) {
+    pageWordCounts_.clear();
+  } else if (pageWordCounts_.size() > partialPageCount_) {
+    pageWordCounts_.resize(partialPageCount_);
+  }
 
   // Remove a stale tmp .bin from a crash-interrupted build; this build recreates it.
   {
@@ -431,8 +457,15 @@ bool Section::startBuild(const ReaderRenderSpec& spec, const std::function<void(
       spec.forceParagraphIndents, spec.paragraphAlignment, spec.viewportWidth, spec.viewportHeight,
       spec.hyphenationEnabled, spec.focusReadingEnabled,
       [this, ctxPtr](std::unique_ptr<Page> page, const ChapterHtmlSlimParser::ParagraphLutEntry syncEntry) {
+        const uint32_t words = page ? page->countWords() : 0;
+        const uint16_t wordCount = words > UINT16_MAX ? UINT16_MAX : static_cast<uint16_t>(words);
         ctxPtr->lut.push_back({this->onPageComplete(std::move(page)), syncEntry.xhtmlByteOffset,
-                               syncEntry.paragraphIndex, syncEntry.listItemIndex, syncEntry.visibleTextOffset});
+                               syncEntry.paragraphIndex, syncEntry.listItemIndex, syncEntry.visibleTextOffset,
+                               wordCount});
+        if (pageWordCounts_.size() < ctxPtr->lut.size()) {
+          pageWordCounts_.resize(ctxPtr->lut.size());
+        }
+        pageWordCounts_[ctxPtr->lut.size() - 1] = wordCount;
       },
       spec.embeddedStyle, ctxPtr->contentBase, ctxPtr->imageBasePath, spec.imageRendering, std::move(tocAnchors),
       popupFn, ctxPtr->cssParser);
@@ -607,8 +640,13 @@ bool Section::commitBuildFile(const uint8_t version, const uint32_t bytesConsume
     serialization::writePod(file, entry.visibleTextOffset);
   }
 
+  // Per-page word counts (v54+), immediately after the visible-text LUT.
+  for (const auto& entry : build_->lut) {
+    serialization::writePod(file, entry.wordCount);
+  }
+
   if (asPartial) {
-    // Watermark trailer, located on load after the visible-text LUT.
+    // Watermark trailer, located on load after visible-text LUT + word-count table.
     serialization::writePod(file, bytesConsumed);
     serialization::writePod(file, totalBytes);
   }
@@ -715,6 +753,11 @@ void Section::suspendBuild() {
   buildComplete_ = false;
   pageCount = partial_ ? partialPageCount_ : 0;
   builtPageCount_ = 0;
+  if (partial_ && pageWordCounts_.size() > pageCount) {
+    pageWordCounts_.resize(pageCount);
+  } else if (!partial_) {
+    pageWordCounts_.clear();
+  }
 }
 
 void Section::abandonBuild() {
@@ -740,6 +783,7 @@ void Section::abandonBuild() {
   partialPageCount_ = 0;
   pageCount = 0;
   builtPageCount_ = 0;
+  pageWordCounts_.clear();
 }
 
 std::unique_ptr<Page> Section::loadPageDuringBuild(const int page) {
@@ -1129,4 +1173,50 @@ std::optional<uint16_t> Section::getPageForVisibleTextOffset(const uint32_t offs
 
 bool Section::buildReachedVisibleTextOffset(const uint32_t offset) const {
   return build_ && !build_->lut.empty() && build_->lut.back().visibleTextOffset >= offset;
+}
+
+uint16_t Section::getPageWordCount(const uint16_t page) const {
+  if (page < pageWordCounts_.size()) {
+    return pageWordCounts_[page];
+  }
+  if (build_ && page < build_->lut.size()) {
+    return build_->lut[page].wordCount;
+  }
+  return 0;
+}
+
+uint32_t Section::estimateRemainingWords(const uint16_t fromPage) const {
+  const uint16_t availablePages = pageCount;
+  uint32_t remaining = 0;
+  for (uint16_t page = fromPage; page < availablePages; ++page) {
+    remaining += getPageWordCount(page);
+  }
+
+  // Still-building / partial chapters: extrapolate unbuilt content from HTML density.
+  uint32_t bytesConsumed = 0;
+  uint32_t totalBytes = 0;
+  if (build_) {
+    bytesConsumed = build_->bytesConsumed;
+    totalBytes = build_->totalBytes;
+  } else if (partial_) {
+    bytesConsumed = partialBytesConsumed_;
+    totalBytes = partialTotalBytes_;
+  }
+
+  if (totalBytes > bytesConsumed && bytesConsumed > 0 && availablePages > 0) {
+    uint32_t knownWords = 0;
+    for (uint16_t page = 0; page < availablePages; ++page) {
+      knownWords += getPageWordCount(page);
+    }
+    if (knownWords > 0) {
+      const uint64_t unbuiltBytes = static_cast<uint64_t>(totalBytes - bytesConsumed);
+      const uint64_t unbuiltWords =
+          (static_cast<uint64_t>(knownWords) * unbuiltBytes) / static_cast<uint64_t>(bytesConsumed);
+      if (unbuiltWords > 0 && unbuiltWords < static_cast<uint64_t>(UINT32_MAX)) {
+        remaining += static_cast<uint32_t>(unbuiltWords);
+      }
+    }
+  }
+
+  return remaining;
 }
