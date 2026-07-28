@@ -1266,6 +1266,9 @@ void ReadingStatsStore::noteWordsRead(const uint32_t words, const uint32_t assoc
   book.totalWordsRead += words;
   book.totalWordsReadingMs += associatedMs;
   markDirty();
+  if (shouldSaveDeferred()) {
+    saveToFile();
+  }
 }
 
 void ReadingStatsStore::tickActiveSession() {

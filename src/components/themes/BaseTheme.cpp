@@ -1068,10 +1068,14 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
   int leftClusterWidth = 0;
   int rightClusterWidth = 0;
 
-  const bool showChapterPages = sb.showChapterPageCount;
-  const bool showBookPercent = sb.showBookProgressPercent;
-  const bool showChapterTime =
+  const bool haveChapterTime =
       sb.showChapterTimeRemaining && chapterTimeEstimate != nullptr && chapterTimeEstimate[0] != '\0';
+  // TIME-only with no rate yet would otherwise leave an empty right cluster; show pages until ETA is ready.
+  const bool showChapterPages =
+      sb.showChapterPageCount ||
+      (SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_TIME && !haveChapterTime);
+  const bool showBookPercent = sb.showBookProgressPercent;
+  const bool showChapterTime = haveChapterTime;
 
   if (showBookPercent || showChapterPages || showChapterTime) {
     // Right aligned text for progress counter
@@ -1188,7 +1192,7 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
 
     // Wider progress clusters (pages+time+%) need less decorative title padding so the
     // title can still truncate cleanly instead of colliding with the right cluster.
-    const int titleSidePad = (showChapterTime && showChapterPages && showBookPercent) ? 12 : 30;
+    const int titleSidePad = showChapterTime ? 12 : 30;
     const int titleMarginLeft = leftClusterWidth + titleSidePad;
     const int titleMarginRight = rightClusterWidth + titleSidePad;
 

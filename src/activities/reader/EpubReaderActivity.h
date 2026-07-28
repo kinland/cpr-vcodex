@@ -243,6 +243,8 @@ class EpubReaderActivity final : public Activity {
   void pageTurn(bool isForwardTurn);
   void skipChapter(bool forward);
   void notePageEnteredIfChanged();
+  void clearPageDwell();
+  void restartPageDwell();
   void maybeCreditPageWords(int spineIndex, int page);
   void requestCurrentPageFullRefresh();
   void toggleTemporaryStatusBar();
