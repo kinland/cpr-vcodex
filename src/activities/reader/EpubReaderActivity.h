@@ -81,9 +81,12 @@ class EpubReaderActivity final : public Activity {
   int idlePrewarmSpine = -1;
   int idlePrewarmPage = -1;
   unsigned long lastRenderCompleteMs = 0;
-  // High-water mark for word-rate credits so back/forward re-reads do not inflate ETA.
-  int wordsCreditedSpineIndex = -1;
-  int wordsCreditedPage = -1;
+  // Word-rate samples: dwell on the page currently displayed. Jumps never credit the left page.
+  unsigned long pageEnteredMs = 0;
+  int pageEnteredSpineIndex = -1;
+  int pageEnteredPage = -1;
+  int lastWordsCreditedSpineIndex = -1;
+  int lastWordsCreditedPage = -1;
   std::shared_ptr<Page> currentOverlayPageCache;
   int currentOverlayPageSpineIndex = -1;
   int currentOverlayPageNumber = -1;
@@ -239,6 +242,8 @@ class EpubReaderActivity final : public Activity {
   void markCurrentBookAsFinished();
   void pageTurn(bool isForwardTurn);
   void skipChapter(bool forward);
+  void notePageEnteredIfChanged();
+  void maybeCreditPageWords(int spineIndex, int page);
   void requestCurrentPageFullRefresh();
   void toggleTemporaryStatusBar();
   void cacheCurrentPageForOverlay(const std::shared_ptr<Page>& page, int marginLeft, int marginTop);

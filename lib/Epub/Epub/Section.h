@@ -31,7 +31,6 @@ class Section {
     uint16_t paragraphIndex;
     uint16_t listItemIndex;
     uint32_t visibleTextOffset;
-    uint16_t wordCount;
   };
   // Held only while an incremental build is in progress (see startBuild). Carries the
   // live parser plus the strings it references (the parser stores them by reference)
