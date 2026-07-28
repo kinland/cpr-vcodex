@@ -34,7 +34,7 @@ namespace {
 constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
 // Cache file magic and version
 constexpr uint32_t CACHE_MAGIC = 0x54585449;  // "TXTI"
-constexpr uint8_t CACHE_VERSION = 8;  // v8: on-disk per-page words for exact remaining (not loaded into RAM)
+constexpr uint8_t CACHE_VERSION = 9;  // v9: totalBookWords only (no per-page word table)
 constexpr uint8_t MARKDOWN_QUOTE_INDENT = 1;
 constexpr uint8_t MARKDOWN_LIST_INDENT = 1;
 
@@ -44,22 +44,6 @@ std::string getStableProgressPath(const std::string& bookId) {
 
 std::string getLegacyProgressPath(Txt& txt) { return txt.getCachePath() + "/progress.bin"; }
 
-// Open index.bin and seek to the per-page word entry for `page`. Shared by single-page
-// reads and remaining-word sums.
-bool openWordCountsFileAt(Txt& book, const uint32_t wordCountsFileOffset, const int page, const int totalPages,
-                          FsFile& outFile) {
-  if (page < 0 || totalPages <= 0 || page >= totalPages || wordCountsFileOffset == 0) {
-    return false;
-  }
-  const std::string cachePath = book.getCachePath() + "/index.bin";
-  if (!Storage.openFileForRead("TRS", cachePath, outFile)) {
-    return false;
-  }
-  if (!outFile.seek(wordCountsFileOffset + static_cast<size_t>(page) * sizeof(uint16_t))) {
-    return false;
-  }
-  return true;
-}
 
 void exitReaderToHomeOrStats(GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& bookPath) {
   READING_STATS.endSession();
@@ -364,9 +348,6 @@ void TxtReaderActivity::onExit() {
   txt.reset();
   decltype(pageOffsets)().swap(pageOffsets);
   totalBookWords = 0;
-  wordCountsFileOffset = 0;
-  cachedRemainingWords = 0;
-  cachedRemainingValid = false;
   decltype(currentPageLines)().swap(currentPageLines);
   endOfBookOptions.reset();
   endOfBookOptionsReady.store(false, std::memory_order_release);
@@ -511,7 +492,6 @@ void TxtReaderActivity::loop() {
   if (prevTriggered) {
     // Backward turns / skips never credit; re-reads credit later if the reader lingers.
     pageDwell.clear();
-    invalidateRemainingWordsCache();
     if (skipPages(-amount)) {
       READING_STATS.noteActivity();
       requestUpdate();
@@ -519,18 +499,8 @@ void TxtReaderActivity::loop() {
   } else if (nextTriggered) {
     if (skip) {
       pageDwell.clear();
-      invalidateRemainingWordsCache();
     } else {
       maybeCreditPageWords(currentPage);
-      if (cachedRemainingValid) {
-        const uint32_t words32 = countWordsInLines(currentPageLines);
-        const uint16_t pageWords = words32 > UINT16_MAX ? UINT16_MAX : static_cast<uint16_t>(words32);
-        if (cachedRemainingWords > pageWords) {
-          cachedRemainingWords -= pageWords;
-        } else {
-          cachedRemainingWords = 0;
-        }
-      }
     }
     if (skipPages(amount)) {
       READING_STATS.noteActivity();
@@ -571,8 +541,8 @@ void TxtReaderActivity::toggleTemporaryStatusBar() {
   // which invalidates pageOffsets and the on-disk word table (different page breaks).
   initialized = false;
   pageOffsets.clear();
+  totalBookWords = 0;
   currentPageLines.clear();
-  invalidateRemainingWordsCache();
   pageDwell.clear();
   pendingForceFullRefresh = true;
   requestUpdate();
@@ -647,7 +617,6 @@ void TxtReaderActivity::initializeReader() {
 
   // Load saved progress
   loadProgress();
-  invalidateRemainingWordsCache();
 
   initialized = true;
 }
@@ -655,14 +624,7 @@ void TxtReaderActivity::initializeReader() {
 void TxtReaderActivity::buildPageIndex() {
   pageOffsets.clear();
   totalBookWords = 0;
-  wordCountsFileOffset = 0;
-  invalidateRemainingWordsCache();
   pageOffsets.push_back(0);  // First page starts at offset 0
-
-  // Temporary during indexing only — written to disk then freed (not kept as a member).
-  // Per-page counts are uint16 like EPUB section cache (saturate pathological dense pages).
-  std::vector<uint16_t> pageWords;
-  pageWords.reserve(256);
 
   size_t offset = 0;
   const size_t fileSize = txt->getFileSize();
@@ -681,10 +643,7 @@ void TxtReaderActivity::buildPageIndex() {
       break;
     }
 
-    const uint32_t words32 = countWordsInLines(tempLines);
-    const uint16_t words = words32 > UINT16_MAX ? UINT16_MAX : static_cast<uint16_t>(words32);
-    pageWords.push_back(words);
-    totalBookWords += words;
+    totalBookWords += countWordsInLines(tempLines);
 
     if (nextOffset <= offset) {
       // No progress made, avoid infinite loop
@@ -703,15 +662,25 @@ void TxtReaderActivity::buildPageIndex() {
   }
 
   totalPages = pageOffsets.size();
-  pageWords.resize(static_cast<size_t>(totalPages), 0);
   LOG_DBG("TRS", "Built page index: %d pages, %lu words", totalPages, static_cast<unsigned long>(totalBookWords));
-  savePageIndexCache(pageWords);
+  savePageIndexCache();
 }
 
 uint32_t TxtReaderActivity::countWordsInLines(const std::vector<TextLine>& lines) const {
+  // Simple whitespace tokenization is enough for TXT pro-rata / average credits.
+  // EPUB keeps layout-token counts; cross-format rates are intentionally coarse.
   uint32_t words = 0;
   for (const auto& line : lines) {
-    words += utf8CountLayoutWords(line.text.data(), line.text.size());
+    bool inWord = false;
+    for (const unsigned char c : line.text) {
+      if (c == ' ' || c == '	' || c == '' || c == '
+') {
+        inWord = false;
+      } else if (!inWord) {
+        inWord = true;
+        ++words;
+      }
+    }
   }
   return words;
 }
@@ -726,17 +695,7 @@ void TxtReaderActivity::maybeCreditPageWords(const int page) {
     return;
   }
 
-  // Prefer live lines when still on that page (avoids SD I/O on the forward-turn hot
-  // path). Fall back to the on-disk index when currentPage has already moved.
-  uint32_t words = 0;
-  if (page == currentPage) {
-    words = countWordsInLines(currentPageLines);
-  } else {
-    uint16_t cachedWords = 0;
-    if (readCachedPageWordCount(page, cachedWords)) {
-      words = cachedWords;
-    }
-  }
+  const uint32_t words = averageWordsPerPage();
   const uint32_t associatedMs = pageDwell.takeCredit(page, 0, words, millis());
   if (associatedMs == 0) {
     return;
@@ -745,34 +704,23 @@ void TxtReaderActivity::maybeCreditPageWords(const int page) {
   READING_STATS.noteWordsRead(words, associatedMs);
 }
 
-void TxtReaderActivity::invalidateRemainingWordsCache() {
-  cachedRemainingWords = 0;
-  cachedRemainingValid = false;
-}
-
-void TxtReaderActivity::ensureRemainingWordsCache() {
-  if (cachedRemainingValid) {
-    return;
+uint32_t TxtReaderActivity::averageWordsPerPage() const {
+  if (totalPages <= 0 || totalBookWords == 0) {
+    return 0;
   }
-  cachedRemainingWords = estimateRemainingWords(currentPage);
-  cachedRemainingValid = true;
+  return totalBookWords / static_cast<uint32_t>(totalPages);
 }
 
 uint32_t TxtReaderActivity::estimateRemainingWords(const int fromPage) const {
-  if (fromPage < 0 || totalPages <= 0 || fromPage >= totalPages) {
+  if (fromPage < 0 || totalPages <= 0 || fromPage >= totalPages || totalBookWords == 0) {
     return 0;
   }
-  uint32_t remaining = 0;
-  if (sumRemainingWordsFromCache(fromPage, remaining)) {
-    return remaining;
-  }
-  if (totalBookWords == 0) {
-    return 0;
-  }
+  // Pro-rate the book total across remaining pages (inclusive of fromPage).
   const uint32_t pagesLeft = static_cast<uint32_t>(totalPages - fromPage);
   return static_cast<uint32_t>((static_cast<uint64_t>(totalBookWords) * pagesLeft) /
                                static_cast<uint32_t>(totalPages));
 }
+
 
 void TxtReaderActivity::resumeAfterSubactivity() {
   READING_STATS.resumeSession();
@@ -1084,9 +1032,6 @@ void TxtReaderActivity::renderPage() {
   if (currentPage >= 0) {
     pageDwell.noteEnteredIfChanged(currentPage, 0, millis());
   }
-  if (ChapterTimeEstimate::statusBarWantsChapterTime() && READING_STATS.getEffectiveWordsPerMs() > 0.0) {
-    ensureRemainingWordsCache();
-  }
   renderStatusBar();
 
   const bool forceFullRefresh = pendingForceFullRefresh;
@@ -1118,8 +1063,8 @@ void TxtReaderActivity::renderStatusBar() const {
   char chapterTimeBuf[24] = {};
   const char* chapterTimeEstimate = nullptr;
   const double wordsPerMs = READING_STATS.getEffectiveWordsPerMs();
-  if (ChapterTimeEstimate::statusBarWantsChapterTime() && wordsPerMs > 0.0 && cachedRemainingValid &&
-      ChapterTimeEstimate::formatRemainingFromRate(cachedRemainingWords, wordsPerMs, chapterTimeBuf,
+  if (ChapterTimeEstimate::statusBarWantsChapterTime() && wordsPerMs > 0.0 &&
+      ChapterTimeEstimate::formatRemainingFromRate(estimateRemainingWords(currentPage), wordsPerMs, chapterTimeBuf,
                                                    sizeof(chapterTimeBuf))) {
     chapterTimeEstimate = chapterTimeBuf;
   }
@@ -1192,7 +1137,6 @@ bool TxtReaderActivity::loadPageIndexCache() {
   // - uint32_t: total pages count
   // - N * uint32_t: page offsets
   // - uint32_t: totalBookWords
-  // - N * uint16_t: per-page word counts (on disk only; not loaded into RAM)
 
   std::string cachePath = txt->getCachePath() + "/index.bin";
   HalFile f;
@@ -1262,8 +1206,6 @@ bool TxtReaderActivity::loadPageIndexCache() {
 
   pageOffsets.clear();
   totalBookWords = 0;
-  wordCountsFileOffset = 0;
-  invalidateRemainingWordsCache();
   pageOffsets.reserve(numPages);
 
   for (uint32_t i = 0; i < numPages; i++) {
@@ -1272,16 +1214,6 @@ bool TxtReaderActivity::loadPageIndexCache() {
     pageOffsets.push_back(offset);
   }
   serialization::readPod(f, totalBookWords);
-  wordCountsFileOffset = static_cast<uint32_t>(f.position());
-
-  // Ensure the on-disk word table is present without loading it into RAM.
-  const uint64_t wordTableBytes = static_cast<uint64_t>(numPages) * sizeof(uint16_t);
-  if (wordCountsFileOffset == 0 ||
-      static_cast<uint64_t>(wordCountsFileOffset) + wordTableBytes > static_cast<uint64_t>(f.size())) {
-    LOG_DBG("TRS", "Cache missing per-page word table, rebuilding");
-    wordCountsFileOffset = 0;
-    return false;
-  }
 
   totalPages = pageOffsets.size();
   LOG_DBG("TRS", "Loaded page index cache: %d pages, %lu words", totalPages,
@@ -1289,12 +1221,11 @@ bool TxtReaderActivity::loadPageIndexCache() {
   return true;
 }
 
-void TxtReaderActivity::savePageIndexCache(const std::vector<uint16_t>& pageWords) {
+void TxtReaderActivity::savePageIndexCache() {
   std::string cachePath = txt->getCachePath() + "/index.bin";
   HalFile f;
   if (!Storage.openFileForWrite("TRS", cachePath, f)) {
     LOG_ERR("TRS", "Failed to save page index cache");
-    wordCountsFileOffset = 0;
     return;
   }
 
@@ -1312,50 +1243,10 @@ void TxtReaderActivity::savePageIndexCache(const std::vector<uint16_t>& pageWord
     serialization::writePod(f, static_cast<uint32_t>(offset));
   }
   serialization::writePod(f, totalBookWords);
-  wordCountsFileOffset = static_cast<uint32_t>(f.position());
-  for (size_t i = 0; i < pageOffsets.size(); ++i) {
-    const uint16_t words = (i < pageWords.size()) ? pageWords[i] : 0;
-    serialization::writePod(f, words);
-  }
 
   LOG_DBG("TRS", "Saved page index cache: %d pages", totalPages);
 }
 
-bool TxtReaderActivity::readCachedPageWordCount(const int page, uint16_t& outWords) const {
-  outWords = 0;
-  if (!txt) {
-    return false;
-  }
-  FsFile f;
-  if (!openWordCountsFileAt(*txt, wordCountsFileOffset, page, totalPages, f)) {
-    return false;
-  }
-  const int n = f.read(reinterpret_cast<uint8_t*>(&outWords), sizeof(outWords));
-  return n == static_cast<int>(sizeof(outWords));
-}
-
-bool TxtReaderActivity::sumRemainingWordsFromCache(const int fromPage, uint32_t& outRemaining) const {
-  outRemaining = 0;
-  if (!txt) {
-    return false;
-  }
-  FsFile f;
-  if (!openWordCountsFileAt(*txt, wordCountsFileOffset, fromPage, totalPages, f)) {
-    return false;
-  }
-
-  uint32_t remaining = 0;
-  for (int page = fromPage; page < totalPages; ++page) {
-    uint16_t words = 0;
-    const int n = f.read(reinterpret_cast<uint8_t*>(&words), sizeof(words));
-    if (n != static_cast<int>(sizeof(words))) {
-      return false;
-    }
-    remaining += words;
-  }
-  outRemaining = remaining;
-  return true;
-}
 
 ScreenshotInfo TxtReaderActivity::getScreenshotInfo() const {
   ScreenshotInfo info;

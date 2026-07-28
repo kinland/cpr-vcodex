@@ -41,21 +41,6 @@ uint32_t utf8DecomposedBase(uint32_t cp);
 // incomplete trailing bytes are excluded.
 int utf8SafeTruncateBuffer(const char* buf, int len);
 
-// EPUB layout word-token byte cap (ChapterHtmlSlimParser::MAX_WORD_SIZE). Long
-// unspaced runs (e.g. CJK) are split with utf8SafeTruncateBuffer at this budget.
-constexpr size_t UTF8_LAYOUT_WORD_MAX_BYTES = 200;
-
-// Count layout words the same way plain-text EPUB tokenization does before
-// hyphenation: ASCII whitespace separates words; U+00A0 / U+202F each count as
-// one word; other non-whitespace runs flush every UTF8_LAYOUT_WORD_MAX_BYTES at
-// a UTF-8 boundary.
-//
-// Intentional divergence from EPUB page credits: EpubReaderActivity credits via
-// TextBlock::wordCount() / Page::countWords() (post-layout tokens after
-// hyphenation splits, ruby, focus pieces). TXT uses this helper on line text, so
-// cross-format words/ms rates are not bit-identical.
-uint32_t utf8CountLayoutWords(const char* data, size_t len);
-
 // Returns true for CJK characters that break without hyphenation. Covers CJK Unified Ideographs,
 // Hiragana, Katakana, Hangul, CJK punctuation, and fullwidth forms. Han and Kana have implicit
 // word boundaries per character; Hangul is space-delimited, so layout keeps Hangul words whole
