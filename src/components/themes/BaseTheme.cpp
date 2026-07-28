@@ -28,6 +28,7 @@
 #include "components/icons/headerIcons.h"
 #include "components/icons/listIcons.h"
 #include "fontIds.h"
+#include "util/ChapterTimeEstimate.h"
 #include "util/TimeUtils.h"
 
 freeink::ui::BitmapRef BaseTheme::checkboxIcon(const bool checked) {
@@ -1068,8 +1069,9 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
   int leftClusterWidth = 0;
   int rightClusterWidth = 0;
 
+  const bool wantChapterTime = ChapterTimeEstimate::statusBarWantsChapterTime();
   const bool haveChapterTime =
-      sb.showChapterTimeRemaining && chapterTimeEstimate != nullptr && chapterTimeEstimate[0] != '\0';
+      wantChapterTime && chapterTimeEstimate != nullptr && chapterTimeEstimate[0] != '\0';
   // TIME-only with no rate yet would otherwise leave an empty right cluster; show pages until ETA is ready.
   const bool showChapterPages =
       sb.showChapterPageCount ||

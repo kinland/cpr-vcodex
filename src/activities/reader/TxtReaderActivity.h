@@ -11,6 +11,7 @@
 #include "EndOfBookOptions.h"
 #include "ReaderPluginSession.h"
 #include "activities/Activity.h"
+#include "util/ChapterTimeEstimate.h"
 
 class TxtReaderActivity final : public Activity {
   ReaderPluginSession pluginSession;
@@ -38,7 +39,8 @@ class TxtReaderActivity final : public Activity {
 
   // Streaming text reader - stores file offsets for each page
   std::vector<size_t> pageOffsets;  // File offset for start of each page
-  std::vector<uint16_t> pageWordCounts;  // Words per page (parallel to pageOffsets)
+  // Book-wide word total for ETA (no per-page array — keeps RAM flat for large TXT).
+  uint32_t totalBookWords = 0;
   std::vector<TextLine> currentPageLines;
   int linesPerPage = 0;
   int viewportWidth = 0;
@@ -49,9 +51,7 @@ class TxtReaderActivity final : public Activity {
   bool waitingForConfirmSecondClick = false;
   unsigned long firstConfirmClickMs = 0UL;
   // Word-rate samples: dwell on the page currently displayed.
-  unsigned long pageEnteredMs = 0;
-  int pageEnteredPage = -1;
-  int lastWordsCreditedPage = -1;
+  ChapterTimeEstimate::PageDwell pageDwell;
 
   // End-of-book next-book suggestions (upstream). Built lazily on the render
   // task; the ready flag is the release/acquire publication point for loop().
@@ -89,9 +89,9 @@ class TxtReaderActivity final : public Activity {
   void toggleTemporaryStatusBar();
   void notePageEnteredIfChanged();
   void clearPageDwell();
-  void restartPageDwell();
   void maybeCreditPageWords(int page);
   uint32_t estimateRemainingWords(int fromPage) const;
+  uint16_t countWordsOnCurrentPage() const;
   std::string moveCompletedBookIfEnabled();
   void exitReaderAfterOptionalCompletedMove();
   void finishBookAndExit();

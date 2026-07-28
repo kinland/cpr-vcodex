@@ -1852,20 +1852,31 @@ void EpubReaderActivity::markCurrentBookAsFinished() {
   exitReaderAfterOptionalCompletedMove();
 }
 
-void EpubReaderActivity::clearPageDwell() {
-  pageEnteredSpineIndex = -1;
-  pageEnteredPage = -1;
-  pageEnteredMs = 0;
-}
+void EpubReaderActivity::clearPageDwell() { pageDwell.clear(); }
 
 void EpubReaderActivity::restartPageDwell() {
   if (!section || section->currentPage < 0) {
     clearPageDwell();
     return;
   }
-  pageEnteredSpineIndex = currentSpineIndex;
-  pageEnteredPage = section->currentPage;
-  pageEnteredMs = millis();
+  pageDwell.restart(currentSpineIndex, section->currentPage, millis());
+}
+
+void EpubReaderActivity::resumeAfterSubactivity() {
+  READING_STATS.resumeSession();
+  restartPageDwell();
+}
+
+void EpubReaderActivity::openReaderSubactivity(std::unique_ptr<Activity>&& activity,
+                                              ActivityResultHandler onResult) {
+  READING_STATS.noteActivity();
+  clearPageDwell();
+  startActivityForResult(std::move(activity), [this, onResult = std::move(onResult)](const ActivityResult& result) {
+    resumeAfterSubactivity();
+    if (onResult) {
+      onResult(result);
+    }
+  });
 }
 
 void EpubReaderActivity::notePageEnteredIfChanged() {
@@ -1873,27 +1884,15 @@ void EpubReaderActivity::notePageEnteredIfChanged() {
   if (page < 0) {
     return;
   }
-  if (currentSpineIndex == pageEnteredSpineIndex && page == pageEnteredPage && pageEnteredMs != 0) {
-    return;
-  }
-  pageEnteredSpineIndex = currentSpineIndex;
-  pageEnteredPage = page;
-  pageEnteredMs = millis();
+  pageDwell.noteEnteredIfChanged(currentSpineIndex, page, millis());
 }
 
 void EpubReaderActivity::maybeCreditPageWords(const int spineIndex, const int page) {
   if (!section || page < 0 || spineIndex < 0) {
     return;
   }
-  // Only credit the page whose dwell we have been tracking (contiguous forward leave / exit).
-  if (spineIndex != pageEnteredSpineIndex || page != pageEnteredPage || pageEnteredMs == 0) {
-    return;
-  }
 
-  const unsigned long dwellMs = millis() - pageEnteredMs;
-  const bool sameAsLastCredit =
-      spineIndex == lastWordsCreditedSpineIndex && page == lastWordsCreditedPage;
-  const uint32_t associatedMs = ChapterTimeEstimate::dwellCreditMs(dwellMs, sameAsLastCredit);
+  const uint32_t associatedMs = pageDwell.creditMs(spineIndex, page, millis());
   if (associatedMs == 0) {
     return;
   }
@@ -1904,8 +1903,7 @@ void EpubReaderActivity::maybeCreditPageWords(const int spineIndex, const int pa
   }
 
   READING_STATS.noteWordsRead(words, associatedMs);
-  lastWordsCreditedSpineIndex = spineIndex;
-  lastWordsCreditedPage = page;
+  pageDwell.markCredited(spineIndex, page);
 }
 
 void EpubReaderActivity::pageTurn(bool isForwardTurn) {
