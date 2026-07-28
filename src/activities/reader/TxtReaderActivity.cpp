@@ -673,7 +673,8 @@ uint32_t TxtReaderActivity::countWordsInLines(const std::vector<TextLine>& lines
   for (const auto& line : lines) {
     bool inWord = false;
     for (const unsigned char c : line.text) {
-      if (c == ' ' || c == '	' || c == '' || c == '
+      if (c == ' ' || c == '	' || c == '
+' || c == '
 ') {
         inWord = false;
       } else if (!inWord) {
@@ -724,11 +725,7 @@ uint32_t TxtReaderActivity::estimateRemainingWords(const int fromPage) const {
 
 void TxtReaderActivity::resumeAfterSubactivity() {
   READING_STATS.resumeSession();
-  if (currentPage < 0) {
-    pageDwell.clear();
-  } else {
-    pageDwell.restart(currentPage, 0, millis());
-  }
+  pageDwell.noteEntered(currentPage, 0, millis(), true);
 }
 
 void TxtReaderActivity::openReaderSubactivity(std::unique_ptr<Activity>&& activity,
@@ -1030,7 +1027,7 @@ void TxtReaderActivity::renderPage() {
   // BW rendering
   renderLines();
   if (currentPage >= 0) {
-    pageDwell.noteEnteredIfChanged(currentPage, 0, millis());
+    pageDwell.noteEntered(currentPage, 0, millis());
   }
   renderStatusBar();
 
