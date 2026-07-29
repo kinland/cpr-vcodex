@@ -159,7 +159,7 @@ struct DirectPixelWriter {
   // Must be called after beginRow() for the current row.
   // No bounds checking — caller guarantees coordinates are valid.
   // pixelValue is already quantized greyscale (0=black .. 3=white). When
-  // invertImages is set (in-ebook ON + Images only), invert that greyscale
+  // invertImages is set (in-ebook ON + Dividers only), invert that greyscale
   // level before thresholding so colour art does not get a raw RGB invert.
   inline void writePixel(int logicalX, uint8_t pixelValue, bool writeWhiteInBw = false) const {
     if (invertImages) {

@@ -364,10 +364,10 @@ class CrossPointSettings {
   static constexpr uint8_t MAX_SLEEP_TIMEOUT_MINUTES = SLEEP_TIMEOUT_NEVER_MINUTES;
 
   // Global dark mode / night mode (inverted output polarity). Upstream calls this
-  // screenInverted (alias below). Cycle: OFF -> ON + Images -> ON; legacy 1 = ON + Images.
+  // screenInverted (alias below). Cycle: OFF -> ON + Dividers -> ON; legacy 1 = ON + Dividers.
   enum DARK_MODE {
     DARK_MODE_OFF = 0,
-    DARK_MODE_ON_IMAGES = 1,
+    DARK_MODE_ON_DIVIDERS = 1,
     DARK_MODE_ON = 2,
     DARK_MODE_COUNT
   };
@@ -490,7 +490,7 @@ class CrossPointSettings {
   uint8_t longPressMenuFunction = LP_MENU_BOOKMARK;
   // UI Theme
   uint8_t uiTheme = LYRA_CUSTOM;
-  // 0=off, 1=on + greyscale-invert in-ebook images, 2=on (UI/text only).
+  // 0=off, 1=on + greyscale-invert decorative in-ebook dividers, 2=on (UI/text only).
   // Upstream JSON may still use "screenInverted" for this field (alias below).
   uint8_t darkMode = DARK_MODE_OFF;
   uint8_t antiGhostingExperimental = 0;
@@ -710,7 +710,7 @@ class CrossPointSettings {
   int getRefreshFrequency() const;
   bool getForcedReaderRefreshMode(HalDisplay::RefreshMode& mode) const;
   bool isDarkModeEnabled() const { return darkMode != DARK_MODE_OFF; }
-  bool isDarkModeInvertImages() const { return darkMode == DARK_MODE_ON_IMAGES; }
+  bool isDarkModeInvertDividers() const { return darkMode == DARK_MODE_ON_DIVIDERS; }
 };
 
 // Helper macro to access settings

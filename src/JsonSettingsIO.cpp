@@ -498,7 +498,7 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   }
   loadToggle("fadingFix", s.fadingFix);
   // Night mode: fork key "darkMode" (enum); upstream files use bool "screenInverted".
-  // Legacy true/1 maps to ON + Images (DARK_MODE_ON_IMAGES).
+  // Legacy true/1 maps to ON + Dividers (DARK_MODE_ON_DIVIDERS).
   if (!doc["darkMode"].isNull()) {
     loadEnum("darkMode", s.darkMode, CrossPointSettings::DARK_MODE_COUNT);
   } else if (!doc["screenInverted"].isNull()) {

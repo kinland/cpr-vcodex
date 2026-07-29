@@ -204,7 +204,7 @@ std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* registry) {
                             "antiGhostingExperimental", StrId::STR_CAT_DISPLAY),
         // Night mode / dark mode: persisted as "darkMode"; upstream alias screenInverted.
         SettingInfo::Enum(StrId::STR_DARK_MODE, &CrossPointSettings::darkMode,
-                          {StrId::STR_STATE_OFF, StrId::STR_STATE_ON_IMAGES, StrId::STR_STATE_ON}, "darkMode",
+                          {StrId::STR_STATE_OFF, StrId::STR_STATE_ON_DIVIDERS, StrId::STR_STATE_ON}, "darkMode",
                           StrId::STR_CAT_DISPLAY),
 
         SettingInfo::Toggle(StrId::STR_SUNLIGHT_FADING_FIX, &CrossPointSettings::fadingFix, "fadingFix",

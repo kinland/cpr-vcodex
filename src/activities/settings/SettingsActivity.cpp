@@ -188,7 +188,7 @@ std::vector<SettingInfo> buildDisplaySettings() {
       SettingInfo::Toggle(StrId::STR_ANTI_GHOSTING_EXPERIMENTAL, &CrossPointSettings::antiGhostingExperimental),
       // Dark mode = inverted output polarity (upstream "night mode" / screenInverted).
       SettingInfo::Enum(StrId::STR_DARK_MODE, &CrossPointSettings::darkMode,
-                        {StrId::STR_STATE_OFF, StrId::STR_STATE_ON_IMAGES, StrId::STR_STATE_ON}),
+                        {StrId::STR_STATE_OFF, StrId::STR_STATE_ON_DIVIDERS, StrId::STR_STATE_ON}),
   };
   // The sunlight fading fix is a grayscale-waveform compensation that does not
   // apply on touch boards / the X4 Pro / X4 Classic (plain OTP waveform).
@@ -854,7 +854,7 @@ void SettingsActivity::afterSettingChanged(const SettingInfo& setting, const uin
   }
   if (setting.valuePtr == &CrossPointSettings::darkMode) {
     renderer.setDarkMode(SETTINGS.isDarkModeEnabled());
-    renderer.setDarkModeInvertImages(SETTINGS.isDarkModeInvertImages());
+    renderer.setDarkModeInvertDividers(SETTINGS.isDarkModeInvertDividers());
     renderer.requestNextFullRefresh();
     requestUpdate(true);
   }
