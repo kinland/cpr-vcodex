@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "Epub/converters/DirectPixelWriter.h"
+#include "Epub/converters/EbookImageDarkMode.h"
 #include "Epub/converters/ImageDecoderFactory.h"
 #include "Epub/converters/PixelCacheFormat.h"
 
@@ -29,6 +30,10 @@ ImageBlock::ExtractFn ImageBlock::extractFn = nullptr;
 void ImageBlock::setExtractor(void* ctx, ExtractFn fn) {
   extractCtx = ctx;
   extractFn = fn;
+  // New book session: restart decorative-divider reuse tracking.
+  if (fn) {
+    ebookImageDarkModeResetSession();
+  }
 }
 
 bool ImageBlock::imageExists() const { return Storage.exists(imagePath.c_str()); }
@@ -176,12 +181,12 @@ bool loadPxcSlot(uint64_t cacheHash, HalFile& cacheFile, uint16_t cachedWidth, u
   return true;
 }
 
-void renderRowsFromPxcSlot(GfxRenderer& renderer, int x, int y) {
+void renderRowsFromPxcSlot(GfxRenderer& renderer, int x, int y, const bool invertDecorative) {
   const int bytesPerRow = (pxcSlotWidth + 3) / 4;
   uint8_t tempRow[PXC_MAX_BYTES_PER_ROW];
 
   DirectPixelWriter pw;
-  pw.init(renderer);
+  pw.init(renderer, invertDecorative);
 
   for (int row = 0; row < pxcSlotHeight; row++) {
     const uint8_t* rowBuffer = pxcRowPtr((size_t)row * bytesPerRow, bytesPerRow, tempRow);
@@ -198,12 +203,14 @@ void renderRowsFromPxcSlot(GfxRenderer& renderer, int x, int y) {
 }
 
 bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x, int y, int expectedWidth,
-                     int expectedHeight, const PixelCacheVariant expectedVariant) {
+                     int expectedHeight, const PixelCacheVariant expectedVariant, const char* identityPath) {
   // A later pass of the same page render: the payload is already in RAM, skip
   // the file entirely.
   const uint64_t cacheHash = imagePathHash(cachePath);
   if (pxcSlotHash == cacheHash && pxcSlotWidth != 0) {
-    renderRowsFromPxcSlot(renderer, x, y);
+    const bool invertDecorative = ebookImageShouldInvert(
+        renderer, static_cast<int16_t>(pxcSlotWidth), static_cast<int16_t>(pxcSlotHeight), identityPath);
+    renderRowsFromPxcSlot(renderer, x, y, invertDecorative);
     return true;
   }
 
@@ -220,6 +227,8 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
 
   LOG_DBG("IMG", "Loading from cache: %s (%dx%d)", cachePath.c_str(), cachedWidth, cachedHeight);
 
+  const bool invertDecorative =
+      ebookImageShouldInvert(renderer, cachedWidth, cachedHeight, identityPath);
   const int bytesPerRow = (cachedWidth + 3) / 4;  // 2 bits per pixel, 4 pixels per byte
 
   // First pass of a page render: try to pull the payload into the RAM slot so
@@ -230,7 +239,7 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
   // (all the SD traffic of streaming plus the slot alloc churn); instead later
   // images take the streaming path below, unchanged from pre-cache behavior.
   if (pxcSlotHash == 0 && loadPxcSlot(cacheHash, cacheFile, cachedWidth, cachedHeight, bytesPerRow)) {
-    renderRowsFromPxcSlot(renderer, x, y);
+    renderRowsFromPxcSlot(renderer, x, y, invertDecorative);
     LOG_DBG("IMG", "Cache render complete (payload now in RAM)");
     return true;
   }
@@ -258,7 +267,7 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
   }
 
   DirectPixelWriter pw;
-  pw.init(renderer);
+  pw.init(renderer, invertDecorative);
 
   int rowsInBuffer = 0;
   int bufferRow = 0;
@@ -364,7 +373,8 @@ void ImageBlock::render(GfxRenderer& renderer, const int x, const int y) {
 
   // Try to render from cache first
   std::string cachePath = getCachePath(imagePath);
-  if (renderFromCache(renderer, cachePath, x, y, width, height, cacheVariant)) {
+  const char* identityPath = !srcPath.empty() ? srcPath.c_str() : imagePath.c_str();
+  if (renderFromCache(renderer, cachePath, x, y, width, height, cacheVariant, identityPath)) {
     renderer.preserveImagePolarity(x, y, width, height);
     return;  // Successfully rendered from cache
   }
@@ -410,6 +420,7 @@ void ImageBlock::render(GfxRenderer& renderer, const int x, const int y) {
   config.useExactDimensions = true;  // Use pre-calculated dimensions to avoid rounding mismatches
   config.cachePath = cachePath;      // Enable caching during decode
   config.cacheVariant = cacheVariant;
+  config.identityPath = !srcPath.empty() ? srcPath : imagePath;
 
   ImageToFramebufferDecoder* decoder = ImageDecoderFactory::getDecoder(imagePath);
   if (!decoder) {
