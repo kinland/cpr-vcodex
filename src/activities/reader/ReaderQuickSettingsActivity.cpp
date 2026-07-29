@@ -39,7 +39,10 @@ const char* fontFamilyText() {
 
 const std::vector<ReaderQuickSettingsActivity::QuickSetting>& ReaderQuickSettingsActivity::settings() {
   static const std::vector<QuickSetting> quickSettings = {
-      {StrId::STR_DARK_MODE, QuickSettingType::Toggle, &CrossPointSettings::darkMode},
+      {StrId::STR_DARK_MODE,
+       QuickSettingType::Enum,
+       &CrossPointSettings::darkMode,
+       {StrId::STR_STATE_OFF, StrId::STR_STATE_ON_IMAGES, StrId::STR_STATE_ON}},
       {StrId::STR_REFRESH_FREQ,
        QuickSettingType::Enum,
        &CrossPointSettings::refreshFrequency,
@@ -131,7 +134,8 @@ void ReaderQuickSettingsActivity::applyImmediateRendererSetting(const QuickSetti
     return;
   }
 
-  renderer.setDarkMode(SETTINGS.darkMode);
+  renderer.setDarkMode(SETTINGS.isDarkModeEnabled());
+  renderer.setDarkModeInvertImages(SETTINGS.isDarkModeInvertImages());
   renderer.setFadingFix(SETTINGS.fadingFix);
   renderer.setTextDarkness(SETTINGS.textDarkness);
   if (needsImmediateRendererFullRefresh(setting)) {

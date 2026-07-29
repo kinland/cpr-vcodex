@@ -60,6 +60,8 @@ class GfxRenderer {
   Orientation orientation;
   bool fadingFix;
   bool darkMode;
+  // When dark mode is on, greyscale-invert ebook/bitmap images (3 - level).
+  bool darkModeInvertImages = false;
   uint8_t textDarkness = 0;  // 0=normal, 1=crisp, 2=dark, 3=extra dark
   uint8_t* frameBuffer = nullptr;
   uint32_t frameBufferLoans = 0;
@@ -220,6 +222,8 @@ class GfxRenderer {
   void setFadingFix(const bool enabled) { fadingFix = enabled; }
   void setDarkMode(const bool enabled) { darkMode = enabled; }
   bool isDarkMode() const { return darkMode; }
+  void setDarkModeInvertImages(const bool enabled) { darkModeInvertImages = enabled; }
+  bool isDarkModeInvertImages() const { return darkModeInvertImages; }
   // Fork aliases for promoteNextRefresh(): one-shot refresh-mode override
   // consumed by the next displayBuffer()/displayBufferAsync() call.
   void requestNextRefresh(const HalDisplay::RefreshMode mode) const {

@@ -497,13 +497,15 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
     s.uiTheme = migrateStoredUiTheme(rawUiTheme, uiThemeSchemaVersion, s.uiTheme, needsResave);
   }
   loadToggle("fadingFix", s.fadingFix);
-  // Night mode: fork key "darkMode"; upstream files carry the same flag as "screenInverted".
+  // Night mode: fork key "darkMode" (enum); upstream files use bool "screenInverted".
+  // Legacy true/1 maps to ON + Images (DARK_MODE_ON_IMAGES).
   if (!doc["darkMode"].isNull()) {
-    loadToggle("darkMode", s.darkMode);
+    loadEnum("darkMode", s.darkMode, CrossPointSettings::DARK_MODE_COUNT);
   } else if (!doc["screenInverted"].isNull()) {
     loadToggle("screenInverted", s.darkMode);
     if (needsResave) *needsResave = true;
   }
+
   loadToggle("antiGhostingExperimental", s.antiGhostingExperimental);
   loadEnum("quickResumeSleepScreen", s.quickResumeSleepScreen, CrossPointSettings::QUICK_RESUME_SLEEP_SCREEN_COUNT);
   loadValue("frontlightBrightness", s.frontlightBrightness, 0, 100);
