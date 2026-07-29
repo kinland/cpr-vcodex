@@ -103,7 +103,13 @@ bool tryDisplayCachedSleepScreen(const GfxRenderer& renderer, const std::string&
   auto& mutableRenderer = const_cast<GfxRenderer&>(renderer);
   if (wantsGreyscaleSleepCache()) {
     if (SleepScreenCache::loadGreyscale(mutableRenderer, sourcePath)) {
+      // BW base first, then grey planes. Loading greys before base on X3 sets
+      // lsbValid and forces displayGrayscaleBase to wipe controller RAM.
       displaySleepGrayscaleBase(renderer);
+      if (!SleepScreenCache::applyGreyscalePlanes(renderer, sourcePath)) {
+        LOG_ERR("SLP", "Cached greyscale planes failed to apply; falling back");
+        return false;
+      }
       renderer.displayGrayBuffer();
       mutableRenderer.setRenderMode(GfxRenderer::BW);
       return true;
@@ -1157,6 +1163,10 @@ bool renderBitmapStatsSleepScreen(GfxRenderer& renderer, const std::string& sour
     if (SleepScreenCache::loadGreyscale(renderer, sourcePath)) {
       drawCoverStatsPanel(renderer, statsPanel, book, footerOnly);
       displaySleepGrayscaleBase(renderer);
+      if (!SleepScreenCache::applyGreyscalePlanes(renderer, sourcePath)) {
+        LOG_ERR("SLP", "Cached greyscale planes failed to apply for stats sleep");
+        return false;
+      }
       renderer.displayGrayBuffer();
       renderer.setRenderMode(GfxRenderer::BW);
       return true;
