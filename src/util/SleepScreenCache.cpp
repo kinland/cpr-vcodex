@@ -127,7 +127,7 @@ bool SleepGreyscaleStreamWriter::seekAndWrite(HalFile& file, const size_t offset
   return file.write(data, length) == length;
 }
 
-bool SleepGreyscaleStreamWriter::seekAndRead(FsFile& file, const size_t offset, uint8_t* data,
+bool SleepGreyscaleStreamWriter::seekAndRead(HalFile& file, const size_t offset, uint8_t* data,
                                              const size_t length) const {
   if (data == nullptr || length == 0) {
     return false;
@@ -336,8 +336,8 @@ bool SleepScreenCache::loadGreyscale(GfxRenderer& renderer, const std::string& s
   const auto msbPath = getCachePath(sourcePath, sourceSize, ".msb.raw");
 
   // Verify grey planes exist and match the panel buffer size before accepting the cache hit.
-  FsFile lsbFile;
-  FsFile msbFile;
+  HalFile lsbFile;
+  HalFile msbFile;
   if (!Storage.openFileForRead("SLC", lsbPath, lsbFile) || lsbFile.fileSize() != bufferSize) {
     if (lsbFile) {
       lsbFile.close();
@@ -374,8 +374,8 @@ bool SleepScreenCache::applyGreyscalePlanes(const GfxRenderer& renderer, const s
   const auto lsbPath = getCachePath(sourcePath, sourceSize, ".lsb.raw");
   const auto msbPath = getCachePath(sourcePath, sourceSize, ".msb.raw");
 
-  FsFile lsbFile;
-  FsFile msbFile;
+  HalFile lsbFile;
+  HalFile msbFile;
   if (!Storage.openFileForRead("SLC", lsbPath, lsbFile) || !Storage.openFileForRead("SLC", msbPath, msbFile)) {
     LOG_ERR("SLC", "Could not open greyscale planes for apply");
     return false;
@@ -446,6 +446,32 @@ void SleepScreenCache::save(const GfxRenderer& renderer, const std::string& sour
   }
 
   LOG_DBG("SLC", "Saved cache: %s", path.c_str());
+}
+
+bool SleepScreenCache::prepareGreyscaleSave(const std::string& sourcePath, const uint32_t sourceFileSize) {
+  if (sourcePath.empty() || sourceFileSize == 0) {
+    return false;
+  }
+  Storage.mkdir(CACHE_DIR);
+  removeEntry(sourcePath, sourceFileSize);
+  return true;
+}
+
+bool SleepScreenCache::saveFrameBufferPlane(const GfxRenderer& renderer, const std::string& sourcePath,
+                                            const uint32_t sourceFileSize, const char* suffix) {
+  if (sourcePath.empty() || sourceFileSize == 0 || suffix == nullptr) {
+    return false;
+  }
+
+  const uint32_t bufferSize = display.getBufferSize();
+  const auto path = getCachePath(sourcePath, sourceFileSize, suffix);
+  if (!writePlaneFile(path.c_str(), renderer.getFrameBuffer(), bufferSize)) {
+    removeEntry(sourcePath, sourceFileSize);
+    return false;
+  }
+
+  LOG_DBG("SLC", "Saved greyscale plane cache: %s", path.c_str());
+  return true;
 }
 
 int SleepScreenCache::invalidateAll() {

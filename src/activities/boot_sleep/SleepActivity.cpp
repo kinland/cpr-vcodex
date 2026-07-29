@@ -125,18 +125,35 @@ bool tryDisplayCachedSleepScreen(const GfxRenderer& renderer, const std::string&
 }
 
 template <typename RenderFn>
-void renderSleepGrayscaleOverlay(GfxRenderer& renderer, RenderFn&& renderFn) {
+void renderSleepGrayscaleOverlay(GfxRenderer& renderer, RenderFn&& renderFn, const std::string& cacheSourcePath = {},
+                                 const uint32_t cacheSourceSize = 0) {
+  // BW plane is already drawn into the framebuffer by the caller.
+  bool cacheOk =
+      !cacheSourcePath.empty() && cacheSourceSize != 0 &&
+      SleepScreenCache::prepareGreyscaleSave(cacheSourcePath, cacheSourceSize);
+  if (cacheOk && !SleepScreenCache::saveFrameBufferPlane(renderer, cacheSourcePath, cacheSourceSize, ".raw")) {
+    LOG_ERR("SLP", "Failed to cache sleep BW plane");
+    cacheOk = false;
+  }
+
   displaySleepGrayscaleBase(renderer);
 
   renderer.clearScreen(0x00);
   renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
   renderFn();
   renderer.copyGrayscaleLsbBuffers();
+  if (cacheOk && !SleepScreenCache::saveFrameBufferPlane(renderer, cacheSourcePath, cacheSourceSize, ".lsb.raw")) {
+    LOG_ERR("SLP", "Failed to cache sleep LSB plane");
+    cacheOk = false;
+  }
 
   renderer.clearScreen(0x00);
   renderer.setRenderMode(GfxRenderer::GRAYSCALE_MSB);
   renderFn();
   renderer.copyGrayscaleMsbBuffers();
+  if (cacheOk && !SleepScreenCache::saveFrameBufferPlane(renderer, cacheSourcePath, cacheSourceSize, ".msb.raw")) {
+    LOG_ERR("SLP", "Failed to cache sleep MSB plane");
+  }
 
   renderer.displayGrayBuffer();
   renderer.setRenderMode(GfxRenderer::BW);
@@ -1457,32 +1474,15 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const std::str
       bitmap.hasGreyscale() && (preserveBackground || SETTINGS.sleepScreenCoverFilter ==
                                                           CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER);
 
-  // Single-pass greyscale decode (+ optional SD strip cache) is only for
-  // full-screen wallpapers. Transparent overlays keep master's white-as-transparent path.
-  SleepGreyStripBatch memoryStrips;
-  SleepGreyscaleStreamWriter streamWriter;
-  ISleepGreyStripSink* stripSink = nullptr;
-  if (hasGreyscale && !preserveBackground) {
-    if (!sourcePath.empty() && sourceFileSize != 0 &&
-        streamWriter.begin(sourcePath, sourceFileSize, display.getBufferSize(), renderer.getDisplayWidthBytes(),
-                           renderer.getDisplayHeight())) {
-      stripSink = &streamWriter;
-    } else if (sourcePath.empty()) {
-      stripSink = &memoryStrips;
-    }
-  }
-
-  const bool greyscaleOnce =
-      hasGreyscale && !preserveBackground && stripSink != nullptr &&
-      renderer.drawGreyscaleBitmapForSleep(bitmap, x, y, pageWidth, pageHeight, cropX, cropY, *stripSink);
-  if (!greyscaleOnce) {
-    if (streamWriter.isActive()) {
-      streamWriter.abort();
-    }
-    if (!renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY, preserveBackground)) {
-      renderer.displayBuffer(kSleepClean);
-      return;
-    }
+  // Always draw BW into the framebuffer first (master's transparent overlays keep
+  // white-as-transparent via preserveBackground). Greyscale uses the overlay path
+  // which stays within normal heap limits and can snapshot each plane into
+  // sleep_cache. Dual-plane stream encode needs ~104KB contiguous RAM and routinely
+  // OOMs on ESP32-C3, which aborted cache writes and forced a slow cold overlay
+  // on every sleep.
+  if (!renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY, preserveBackground)) {
+    renderer.displayBuffer(kSleepClean);
+    return;
   }
 
   if (!preserveBackground &&
@@ -1490,27 +1490,18 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const std::str
     renderer.invertScreen();
   }
 
-  if (!preserveBackground && !sourcePath.empty()) {
-    if (streamWriter.isActive() && greyscaleOnce) {
-      streamWriter.commitBw(renderer.getFrameBuffer(), display.getBufferSize());
-    } else if (canUseSleepCache(bitmap)) {
+  if (hasGreyscale) {
+    renderSleepGrayscaleOverlay(
+        renderer,
+        [&]() {
+          bitmap.rewindToData();
+          renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY);
+        },
+        preserveBackground ? std::string{} : sourcePath, preserveBackground ? 0u : sourceFileSize);
+  } else {
+    if (!preserveBackground && !sourcePath.empty() && canUseSleepCache(bitmap)) {
       SleepScreenCache::save(renderer, sourcePath);
     }
-  }
-
-  if (hasGreyscale) {
-    if (greyscaleOnce && stripSink != nullptr) {
-      displaySleepGrayscaleBase(renderer);
-      stripSink->flushToDisplay(renderer);
-      renderer.displayGrayBuffer();
-      renderer.setRenderMode(GfxRenderer::BW);
-    } else {
-      renderSleepGrayscaleOverlay(renderer, [&]() {
-        bitmap.rewindToData();
-        renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY);
-      });
-    }
-  } else {
     displaySleepBuffer(renderer);
   }
 }
