@@ -44,6 +44,9 @@ class ActivityManager {
   std::unique_ptr<Activity> currentActivity;
 
   void exitActivity(const RenderLock& lock);
+  // Apply queued push/pop/replace until idle. Safe to call from replaceActivity
+  // after an immediate onEnter() (Reader trampoline) and from loop().
+  void drainPendingActions();
 
   // Pending activity to be launched on next loop iteration
   std::unique_ptr<Activity> pendingActivity;
@@ -83,6 +86,9 @@ class ActivityManager {
 
   // Will replace currentActivity and drop all activities on stack
   void replaceActivity(std::unique_ptr<Activity>&& newActivity);
+
+  // True while a push/pop/replace is queued (Reader trampoline must not fall through).
+  bool hasPendingTransition() const { return pendingAction != PendingAction::None; }
 
   // goTo... functions are convenient wrapper for replaceActivity()
   void goToFileTransfer();

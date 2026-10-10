@@ -841,15 +841,6 @@ void setup() {
   // restore reader resources or restart Home.
   setupDisplayAndFonts(resume != BootResume::Splash, !otaBoot && !koReaderRecoveryBoot);
 
-  // Firmware-side equivalent of FreeInk SDK 6644bf2: a sunlight-fading
-  // refresh powers the X4 panel down afterwards, but its first paint after a
-  // splashless wake still needs a non-differential waveform to replace the
-  // retained sleep image. The next displayBuffer consumes this one-shot; if a
-  // loading icon is drawn below, that HALF refresh consumes it harmlessly.
-  if (resume == BootResume::SplashlessWake && gpio.deviceIsX4()) {
-    renderer.requestNextRefresh(HalDisplay::HALF_REFRESH);
-  }
-
   switch (resume) {
     case BootResume::Silent:
       // Splash skipped: the routing block below picks the target activity; the
@@ -869,8 +860,19 @@ void setup() {
           allowFastInitialReaderRefresh = true;
         }
       } else {
-        // Clean the retained sleep image as part of the first Home paint.
+        // Greyscale/cover sleep left gray content on the panel. Reseed controller
+        // gray planes from the cleared BW buffer; first Home/Reader paint must
+        // use a non-differential refresh or the page ghosts over the sleep image
+        // ("double exposure") until the next update.
+        renderer.cleanupGrayscaleWithFrameBuffer();
         needsWakeRefresh = true;
+      }
+      // Firmware-side equivalent of FreeInk SDK 6644bf2: first paint after a
+      // splashless wake needs a non-differential waveform. Applied for X3 and X4
+      // when we did not restore a quick-resume BW frame (re-armed again after
+      // goToReader if an intermediate draw consumes this one-shot).
+      if (needsWakeRefresh || gpio.deviceIsX4()) {
+        renderer.requestNextRefresh(HalDisplay::HALF_REFRESH);
       }
       break;
     case BootResume::Splash:
@@ -1009,6 +1011,14 @@ void setup() {
       }
       APP_STATE.saveToFile();
       activityManager.goToReader(path, allowFastInitialReaderRefresh);
+      if (needsWakeRefresh) {
+        // Prefer the reader's forced-clean path (FULL) so the first page does not
+        // FAST-refresh over retained greyscale sleep. Also re-arm HALF in case a
+        // format reader lacks handleForcedRefresh.
+        if (!activityManager.handleForcedRefresh()) {
+          renderer.requestNextRefresh(HalDisplay::HALF_REFRESH);
+        }
+      }
     }
   }
 
