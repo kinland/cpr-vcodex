@@ -14,10 +14,10 @@ TEST(TokenBoundaryRegression, DistinguishesNormalAndBreakableAttachments) {
 
 TEST(TokenBoundaryRegression, VisibleHyphensBreakButConditionalOnesKeepTheirMeaning) {
   EXPECT_TRUE(TokenBoundary::allowsBreakAfterExplicitHyphen('-'));
-  EXPECT_TRUE(TokenBoundary::allowsBreakAfterExplicitHyphen(0x2014));  // em dash
-  EXPECT_TRUE(TokenBoundary::allowsBreakAfterExplicitHyphen(0x2010));  // hyphen
-  EXPECT_TRUE(TokenBoundary::allowsBreakAfterExplicitHyphen(0x2013));  // en dash
-  EXPECT_TRUE(TokenBoundary::allowsBreakAfterExplicitHyphen(0xFF0D));  // full-width hyphen
+  EXPECT_TRUE(TokenBoundary::allowsBreakAfterExplicitHyphen(0x2014));   // em dash
+  EXPECT_TRUE(TokenBoundary::allowsBreakAfterExplicitHyphen(0x2010));   // hyphen
+  EXPECT_TRUE(TokenBoundary::allowsBreakAfterExplicitHyphen(0x2013));   // en dash
+  EXPECT_TRUE(TokenBoundary::allowsBreakAfterExplicitHyphen(0xFF0D));   // full-width hyphen
   EXPECT_FALSE(TokenBoundary::allowsBreakAfterExplicitHyphen(0x00AD));  // soft hyphen
   EXPECT_FALSE(TokenBoundary::allowsBreakAfterExplicitHyphen(0x2011));  // non-breaking hyphen
   EXPECT_FALSE(TokenBoundary::allowsBreakAfterExplicitHyphen('.'));

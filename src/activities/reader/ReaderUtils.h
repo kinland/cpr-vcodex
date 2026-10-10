@@ -9,9 +9,9 @@
 #include <components/bars/tap-zones.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
-#include <cctype>
 #include <memory>
 #include <new>
 #include <string_view>
@@ -449,7 +449,6 @@ inline bool handleBackNavigation(const MappedInputManager& mappedInput, Activity
   }
   return true;
 }
-
 
 // Compact chapter-ETA duration / remaining-time helpers (defined in ReaderUtils.cpp).
 bool formatCompactDuration(uint64_t totalMs, char* buf, size_t bufSize);

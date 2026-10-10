@@ -33,7 +33,7 @@ namespace {
 constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
 // Cache file magic and version
 constexpr uint32_t CACHE_MAGIC = 0x54585449;  // "TXTI"
-constexpr uint8_t CACHE_VERSION = 10;  // v10: page offsets only (chapter ETA uses page-rate)
+constexpr uint8_t CACHE_VERSION = 10;         // v10: page offsets only (chapter ETA uses page-rate)
 constexpr uint8_t MARKDOWN_QUOTE_INDENT = 1;
 constexpr uint8_t MARKDOWN_LIST_INDENT = 1;
 
@@ -42,7 +42,6 @@ std::string getStableProgressPath(const std::string& bookId) {
 }
 
 std::string getLegacyProgressPath(Txt& txt) { return txt.getCachePath() + "/progress.bin"; }
-
 
 void exitReaderToHomeOrStats(GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& bookPath) {
   READING_STATS.endSession();
@@ -639,7 +638,7 @@ void TxtReaderActivity::buildPageIndex() {
       break;
     }
 
-      if (nextOffset <= offset) {
+    if (nextOffset <= offset) {
       // No progress made, avoid infinite loop
       break;
     }
@@ -679,15 +678,12 @@ void TxtReaderActivity::maybeCreditPage(const int page) {
   READING_STATS.notePagesRead(kPages, associatedMs);
 }
 
-
-
 void TxtReaderActivity::resumeAfterSubactivity() {
   READING_STATS.resumeSession();
   pageDwell.noteEntered(currentPage, 0, millis(), true);
 }
 
-void TxtReaderActivity::openReaderSubactivity(std::unique_ptr<Activity>&& activity,
-                                              ActivityResultHandler onResult) {
+void TxtReaderActivity::openReaderSubactivity(std::unique_ptr<Activity>&& activity, ActivityResultHandler onResult) {
   READING_STATS.noteActivity();
   pageDwell.clear();
   startActivityForResult(std::move(activity), [this, onResult = std::move(onResult)](const ActivityResult& result) {
@@ -1197,7 +1193,6 @@ void TxtReaderActivity::savePageIndexCache() const {
 
   LOG_DBG("TRS", "Saved page index cache: %d pages", totalPages);
 }
-
 
 ScreenshotInfo TxtReaderActivity::getScreenshotInfo() const {
   ScreenshotInfo info;

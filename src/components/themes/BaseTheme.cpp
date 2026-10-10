@@ -1069,8 +1069,7 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
   int rightClusterWidth = 0;
 
   const bool wantChapterTime = SETTINGS.statusBarWantsChapterTime();
-  const bool haveChapterTime =
-      wantChapterTime && chapterTimeEstimate != nullptr && chapterTimeEstimate[0] != '\0';
+  const bool haveChapterTime = wantChapterTime && chapterTimeEstimate != nullptr && chapterTimeEstimate[0] != '\0';
   // TIME-only with no rate yet would otherwise leave an empty right cluster; show pages until ETA is ready.
   const bool showChapterPages =
       sb.showChapterPageCount ||
@@ -1095,8 +1094,8 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
       appendProgress(snprintf(progressStr + offset, sizeof(progressStr) - offset, "%d/%d", currentPage, pageCount));
     }
     if (showChapterTime && offset < sizeof(progressStr)) {
-      appendProgress(snprintf(progressStr + offset, sizeof(progressStr) - offset, "%s%s",
-                              showChapterPages ? " (" : "", chapterTimeEstimate));
+      appendProgress(snprintf(progressStr + offset, sizeof(progressStr) - offset, "%s%s", showChapterPages ? " (" : "",
+                              chapterTimeEstimate));
       if (showChapterPages && offset < sizeof(progressStr)) {
         appendProgress(snprintf(progressStr + offset, sizeof(progressStr) - offset, ")"));
       }

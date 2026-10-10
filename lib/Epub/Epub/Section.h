@@ -157,5 +157,4 @@ class Section {
   std::optional<uint32_t> getVisibleTextOffsetForPage(uint16_t page) const;
   std::optional<uint16_t> getPageForVisibleTextOffset(uint32_t offset, bool preferFirstAtOffset = false) const;
   bool buildReachedVisibleTextOffset(uint32_t offset) const;
-
 };

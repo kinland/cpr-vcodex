@@ -332,8 +332,7 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
   if (fillPreviewChapterTimeEstimate(previewChapterTimeBuf, sizeof(previewChapterTimeBuf))) {
     previewChapterTime = previewChapterTimeBuf;
   }
-  GUI.drawStatusBar(renderer, 75, 8, 32, title, metrics.buttonHintsHeight, 0, false, false, false,
-                    previewChapterTime);
+  GUI.drawStatusBar(renderer, 75, 8, 32, title, metrics.buttonHintsHeight, 0, false, false, false, previewChapterTime);
 
   renderer.drawCenteredText(UI_10_FONT_ID,
                             renderer.getScreenHeight() - UITheme::getInstance().getStatusBarHeight() -

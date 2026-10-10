@@ -62,8 +62,8 @@
 #include "util/AchievementPopupUtils.h"
 #include "util/BookIdentity.h"
 #include "util/ButtonNavigator.h"
-#include "util/PageDwell.h"
 #include "util/CompletedBookMover.h"
+#include "util/PageDwell.h"
 #include "util/ScreenshotUtil.h"
 #include "util/TaskWatchdog.h"
 
@@ -1446,10 +1446,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       READING_STATS.noteActivity();
       pageDwell.clear();
       startActivityForResult(std::make_unique<ReaderQuickSettingsActivity>(renderer, mappedInput),
-                             [this, before](const ActivityResult&) {
-                               applyReaderSettingsChanges(before);
-                               
-                             });
+                             [this, before](const ActivityResult&) { applyReaderSettingsChanges(before); });
       break;
     }
     case EpubReaderMenuActivity::MenuAction::SELECT_CHAPTER: {
@@ -1472,7 +1469,6 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       startActivityForResult(
           std::make_unique<EpubReaderChapterSelectionActivity>(renderer, mappedInput, epub, spineIdx),
           [this](const ActivityResult& result) {
-            
             if (!result.isCancelled) {
               const auto& chapterResult = std::get<ChapterResult>(result.data);
               RenderLock lock(*this);
@@ -1518,7 +1514,6 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
           std::make_unique<DictionaryHistoryActivity>(renderer, mappedInput, page, SETTINGS.getReaderFontId(),
                                                       overlayMarginLeft, overlayMarginTop),
           [this](const ActivityResult&) {
-            
             ReaderUtils::requestReaderUiTransitionRefresh(renderer);
             requestUpdate();
           });
@@ -1529,7 +1524,6 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       pageDwell.clear();
       startActivityForResult(std::make_unique<DictionaryActivity>(renderer, mappedInput),
                              [this](const ActivityResult&) {
-                               
                                ReaderUtils::requestReaderUiTransitionRefresh(renderer);
                                requestUpdate();
                              });
@@ -1548,7 +1542,6 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
                                                 return removed;
                                               }),
           [this](const ActivityResult& result) {
-            
             if (!result.isCancelled) {
               const auto& bookmark = std::get<BookmarkResult>(result.data);
               const bool needsAnchorJump = bookmark.hasVisibleTextOffset;
@@ -1568,7 +1561,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
                   section->currentPage != static_cast<int>(bookmark.page)) {
                 RenderLock lock(*this);
                 clearDeferredReposition();
-              pageDwell.clear();
+                pageDwell.clear();
                 currentSpineIndex = bookmark.spineIndex;
                 nextPageNumber = static_cast<int>(bookmark.page);
                 pendingVisibleTextOffset =
@@ -1648,7 +1641,6 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       startActivityForResult(
           std::make_unique<EpubReaderPercentSelectionActivity>(renderer, mappedInput, initialPercent),
           [this](const ActivityResult& result) {
-            
             if (!result.isCancelled) {
               jumpToPercent(std::get<PercentResult>(result.data).percent);
             }
@@ -1658,7 +1650,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
     }
     case EpubReaderMenuActivity::MenuAction::DISPLAY_QR: {
       if (section && section->currentPage >= 0 && section->currentPage < section->pageCount) {
-      pageDwell.clear();
+        pageDwell.clear();
         std::string fullText = section->getTextFromSectionFile();
         if (!fullText.empty()) {
           READING_STATS.noteActivity();
@@ -1688,7 +1680,6 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       startActivityForResult(
           std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_MARK_AS_FINISHED_CONFIRM), title),
           [this](const ActivityResult& result) {
-            
             if (!result.isCancelled) {
               markCurrentBookAsFinished();
             } else {
@@ -1865,8 +1856,7 @@ void EpubReaderActivity::resumeAfterSubactivity() {
                         section ? section->currentPage : 0, millis(), true);
 }
 
-void EpubReaderActivity::openReaderSubactivity(std::unique_ptr<Activity>&& activity,
-                                              ActivityResultHandler onResult) {
+void EpubReaderActivity::openReaderSubactivity(std::unique_ptr<Activity>&& activity, ActivityResultHandler onResult) {
   READING_STATS.noteActivity();
   pageDwell.clear();
   startActivityForResult(std::move(activity), [this, onResult = std::move(onResult)](const ActivityResult& result) {
@@ -1897,7 +1887,6 @@ void EpubReaderActivity::maybeCreditPage(const int spineIndex, const int page) {
 
   READING_STATS.notePagesRead(kPages, associatedMs);
 }
-
 
 void EpubReaderActivity::pageTurn(bool isForwardTurn) {
   if (!section) {
@@ -2830,10 +2819,9 @@ void EpubReaderActivity::renderStatusBar() const {
     if (SETTINGS.statusBarWantsChapterTime() && pagesPerMs > 0.0) {
       const uint16_t estimatedTotal = section->estimatedTotalPages();
       const int current = section->currentPage;
-      const uint32_t remainingPages =
-          (current >= 0 && estimatedTotal > static_cast<uint16_t>(current))
-              ? static_cast<uint32_t>(estimatedTotal - static_cast<uint16_t>(current))
-              : 0;
+      const uint32_t remainingPages = (current >= 0 && estimatedTotal > static_cast<uint16_t>(current))
+                                          ? static_cast<uint32_t>(estimatedTotal - static_cast<uint16_t>(current))
+                                          : 0;
       if (ReaderUtils::formatRemainingFromRate(remainingPages, pagesPerMs, chapterTimeBuf, sizeof(chapterTimeBuf))) {
         chapterTimeEstimate = chapterTimeBuf;
       }

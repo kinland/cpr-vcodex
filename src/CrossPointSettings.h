@@ -3,8 +3,8 @@
 #include <HalDisplay.h>
 #include <HalStorage.h>
 
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <iosfwd>
 
 #include "util/HomeButtonInput.h"
@@ -710,12 +710,11 @@ class CrossPointSettings {
   int getRefreshFrequency() const;
   bool getForcedReaderRefreshMode(HalDisplay::RefreshMode& mode) const;
 
-  // Chapter Progress setting: Pages+Time / Time modes want a chapter ETA slot.
+  // Chapter Progress setting: Pages + Time / Time modes want a chapter ETA slot.
   bool statusBarWantsChapterTime() const {
-    return statusBarChapterProgress == CHAPTER_PROGRESS_PAGES_TIME ||
-           statusBarChapterProgress == CHAPTER_PROGRESS_TIME;
+    return statusBarChapterProgress == CHAPTER_PROGRESS_PAGES_TIME || statusBarChapterProgress == CHAPTER_PROGRESS_TIME;
   }
-  // Label for statusBarChapterProgress enum index. Pages+Time is composed from
+  // Label for statusBarChapterProgress enum index. Pages + Time is composed from
   // STR_PAGES + ' + ' + STR_TIME (no dedicated i18n key).
   static bool formatChapterProgressLabel(uint8_t mode, char* buf, size_t bufSize);
 };

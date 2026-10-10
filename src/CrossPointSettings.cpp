@@ -358,10 +358,10 @@ unsigned long CrossPointSettings::getSleepTimeoutMs() const {
 
 CrossPointSettings::StatusBarSpec CrossPointSettings::statusBarSpec() const {
   StatusBarSpec spec;
-  spec.showChapterPageCount = statusBarChapterProgress == CHAPTER_PROGRESS_PAGES ||
-                              statusBarChapterProgress == CHAPTER_PROGRESS_PAGES_TIME;
-  spec.showChapterTimeRemaining = statusBarChapterProgress == CHAPTER_PROGRESS_PAGES_TIME ||
-                                  statusBarChapterProgress == CHAPTER_PROGRESS_TIME;
+  spec.showChapterPageCount =
+      statusBarChapterProgress == CHAPTER_PROGRESS_PAGES || statusBarChapterProgress == CHAPTER_PROGRESS_PAGES_TIME;
+  spec.showChapterTimeRemaining =
+      statusBarChapterProgress == CHAPTER_PROGRESS_PAGES_TIME || statusBarChapterProgress == CHAPTER_PROGRESS_TIME;
   spec.showBookProgressPercent = statusBarBookProgressPercentage != 0;
   spec.titleMode = statusBarTitle;
   spec.showBattery = statusBarBattery != 0;
@@ -570,7 +570,7 @@ bool CrossPointSettings::formatChapterProgressLabel(const uint8_t mode, char* bu
       return written > 0 && static_cast<size_t>(written) < bufSize;
     }
     case CHAPTER_PROGRESS_PAGES_TIME: {
-      const int written = snprintf(buf, bufSize, "%s+%s", tr(STR_PAGES), tr(STR_TIME));
+      const int written = snprintf(buf, bufSize, "%s + %s", tr(STR_PAGES), tr(STR_TIME));
       return written > 0 && static_cast<size_t>(written) < bufSize;
     }
     case CHAPTER_PROGRESS_TIME: {

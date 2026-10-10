@@ -54,15 +54,13 @@ constexpr uint8_t SECTION_FILE_VERSION = 55;
 constexpr uint8_t SECTION_FILE_INCOMPLETE_VERSION = 0;
 // Written when a build is suspended partway (reader exited or device slept mid-build).
 // The file carries valid pages 0..pageCount-1, all LUTs, and a trailer with the parse
-// watermark (bytesConsumed, totalBytes) appended after the visible-text LUT. loadSectionFile accepts it so a resume shows those pages
-// instantly; the reader extends it by rebuilding in the background. Uses the same
-// header layout as SECTION_FILE_VERSION,
-// so finalized files are untouched by this feature; older firmware treats the sentinel
-// as an unknown version and rebuilds, which is a safe downgrade.
-// MUST change in lockstep with SECTION_FILE_VERSION: the sentinel IS the partial's
-// format version, so a stale-format partial otherwise passes the header check and
-// only fails (noisily, via the block-decode error path) when a page is loaded.
-// Derived so the pairing can't be forgotten: 0xFE for v28, 0xFD for v29, ...
+// watermark (bytesConsumed, totalBytes) appended after the visible-text LUT. loadSectionFile accepts it so a resume
+// shows those pages instantly; the reader extends it by rebuilding in the background. Uses the same header layout as
+// SECTION_FILE_VERSION, so finalized files are untouched by this feature; older firmware treats the sentinel as an
+// unknown version and rebuilds, which is a safe downgrade. MUST change in lockstep with SECTION_FILE_VERSION: the
+// sentinel IS the partial's format version, so a stale-format partial otherwise passes the header check and only fails
+// (noisily, via the block-decode error path) when a page is loaded. Derived so the pairing can't be forgotten: 0xFE for
+// v28, 0xFD for v29, ...
 constexpr uint8_t SECTION_FILE_PARTIAL_VERSION = 0xFE - (SECTION_FILE_VERSION - 28);
 constexpr uint32_t HEADER_SIZE = sizeof(uint8_t) + sizeof(int) + sizeof(float) + sizeof(bool) + sizeof(bool) +
                                  sizeof(uint8_t) + sizeof(uint16_t) + sizeof(uint16_t) + sizeof(uint16_t) +
@@ -721,7 +719,6 @@ void Section::suspendBuild() {
   builtPageCount_ = 0;
 }
 
-
 void Section::abandonBuild() {
   if (!build_) return;
   if (build_->parser) build_->parser->abortParse();
@@ -1135,4 +1132,3 @@ std::optional<uint16_t> Section::getPageForVisibleTextOffset(const uint32_t offs
 bool Section::buildReachedVisibleTextOffset(const uint32_t offset) const {
   return build_ && !build_->lut.empty() && build_->lut.back().visibleTextOffset >= offset;
 }
-
