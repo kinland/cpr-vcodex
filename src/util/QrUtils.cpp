@@ -21,10 +21,9 @@ constexpr int MAX_READABLE_VERSION = 20;
 // The QR library can auto-select numeric/alphanumeric mode, but page excerpts are
 // usually byte mode; using byte capacities keeps version selection conservative.
 constexpr uint16_t BYTE_CAPACITY_ECC_LOW[] = {
-    17,   32,   53,   78,   106,  134,  154,  192,  230,  271,
-    321,  367,  425,  458,  520,  586,  644,  718,  792,  858,
-    929,  1003, 1091, 1171, 1273, 1367, 1465, 1528, 1628, 1732,
-    1840, 1952, 2068, 2188, 2303, 2431, 2563, 2699, 2809, 2953,
+    17,   32,   53,   78,   106,  134,  154,  192,  230,  271,  321,  367,  425,  458,
+    520,  586,  644,  718,  792,  858,  929,  1003, 1091, 1171, 1273, 1367, 1465, 1528,
+    1628, 1732, 1840, 1952, 2068, 2188, 2303, 2431, 2563, 2699, 2809, 2953,
 };
 
 int getMaxReadableVersion(const Rect& bounds) {
@@ -79,9 +78,8 @@ void QrUtils::drawQrCode(const GfxRenderer& renderer, const Rect& bounds, const 
 
   QRCode qrcode;
   // Initialize the QR code. We use ECC_LOW for max capacity.
-  int8_t res =
-      qrcode_initBytes(&qrcode, qrcodeBytes.get(), version, ECC_LOW, reinterpret_cast<uint8_t*>(const_cast<char*>(payload)),
-                       static_cast<uint16_t>(len));
+  int8_t res = qrcode_initBytes(&qrcode, qrcodeBytes.get(), version, ECC_LOW,
+                                reinterpret_cast<uint8_t*>(const_cast<char*>(payload)), static_cast<uint16_t>(len));
 
   if (res == 0) {
     const int maxDim = std::min(bounds.width, bounds.height);

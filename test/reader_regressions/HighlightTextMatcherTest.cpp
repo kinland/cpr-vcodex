@@ -27,8 +27,7 @@ TEST(HighlightTextMatcherTest, JoinsAdjacentEllipsisFragment) {
   constexpr char token[] = "it\xE2\x80\xA6";
   const auto prefix = HighlightTextMatcher::matchTokenFragment("it", false, token, sizeof(token) - 1, 0);
   ASSERT_EQ(prefix.match, TokenFragmentMatch::CONTINUES_TOKEN);
-  EXPECT_EQ(HighlightTextMatcher::matchTokenFragment("\xE2\x80\xA6", false, token, sizeof(token) - 1,
-                                                     prefix.tokenBytes)
+  EXPECT_EQ(HighlightTextMatcher::matchTokenFragment("\xE2\x80\xA6", false, token, sizeof(token) - 1, prefix.tokenBytes)
                 .match,
             TokenFragmentMatch::COMPLETES_TOKEN);
 }
@@ -38,8 +37,8 @@ TEST(HighlightTextMatcherTest, NormalizesNbspBeforeEllipsis) {
   const auto prefix = HighlightTextMatcher::matchTokenFragment("it", false, token, sizeof(token) - 1, 0);
   ASSERT_EQ(prefix.match, TokenFragmentMatch::CONTINUES_TOKEN);
 
-  const auto ellipsis = HighlightTextMatcher::matchTokenFragment(
-      "\xC2\xA0\xE2\x80\xA6", false, token, sizeof(token) - 1, prefix.tokenBytes);
+  const auto ellipsis = HighlightTextMatcher::matchTokenFragment("\xC2\xA0\xE2\x80\xA6", false, token,
+                                                                 sizeof(token) - 1, prefix.tokenBytes);
   EXPECT_EQ(ellipsis.match, TokenFragmentMatch::COMPLETES_TOKEN);
   EXPECT_EQ(ellipsis.tokenBytes, 4U);
 }

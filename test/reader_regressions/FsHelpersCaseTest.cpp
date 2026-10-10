@@ -1,9 +1,8 @@
+#include <HalStorage.h>
 #include <gtest/gtest.h>
 
 #include <chrono>
 #include <filesystem>
-
-#include <HalStorage.h>
 
 #include "lib/FsHelpers/FsHelpers.h"
 
@@ -13,8 +12,7 @@ class TemporaryStorageRoot {
  public:
   TemporaryStorageRoot()
       : path(std::filesystem::temp_directory_path() /
-             ("cpr-vcodex-fs-case-" +
-              std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))) {
+             ("cpr-vcodex-fs-case-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))) {
     std::filesystem::create_directories(path);
     Storage.setTestRootPath(path);
   }

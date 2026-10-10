@@ -128,9 +128,8 @@ template <typename RenderFn>
 void renderSleepGrayscaleOverlay(GfxRenderer& renderer, RenderFn&& renderFn, const std::string& cacheSourcePath = {},
                                  const uint32_t cacheSourceSize = 0) {
   // BW plane is already drawn into the framebuffer by the caller.
-  bool cacheOk =
-      !cacheSourcePath.empty() && cacheSourceSize != 0 &&
-      SleepScreenCache::prepareGreyscaleSave(cacheSourcePath, cacheSourceSize);
+  bool cacheOk = !cacheSourcePath.empty() && cacheSourceSize != 0 &&
+                 SleepScreenCache::prepareGreyscaleSave(cacheSourcePath, cacheSourceSize);
   if (cacheOk && !SleepScreenCache::saveFrameBufferPlane(renderer, cacheSourcePath, cacheSourceSize, ".raw")) {
     LOG_ERR("SLP", "Failed to cache sleep BW plane");
     cacheOk = false;

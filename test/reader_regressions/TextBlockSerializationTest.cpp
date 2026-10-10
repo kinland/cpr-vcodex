@@ -1,11 +1,10 @@
+#include <HalStorage.h>
 #include <gtest/gtest.h>
 
 #include <chrono>
 #include <filesystem>
 #include <string>
 #include <vector>
-
-#include <HalStorage.h>
 
 #include "lib/Epub/Epub/blocks/TextBlock.h"
 
@@ -15,8 +14,8 @@ class TemporaryFile {
  public:
   TemporaryFile()
       : path(std::filesystem::temp_directory_path() /
-             ("cpr-vcodex-text-block-" +
-              std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".bin")) {}
+             ("cpr-vcodex-text-block-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
+              ".bin")) {}
   ~TemporaryFile() { std::filesystem::remove(path); }
 
   std::filesystem::path path;

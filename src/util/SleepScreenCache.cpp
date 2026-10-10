@@ -290,13 +290,15 @@ void SleepGreyscaleStreamWriter::flushToDisplay(const GfxRenderer& renderer) con
     const size_t activeStripBytes = static_cast<size_t>(panelWidthBytes_) * static_cast<size_t>(rows);
     const size_t offset = static_cast<size_t>(yStart) * panelWidthBytes_;
 
-    if (!lsbFile.seekSet(offset) || lsbFile.read(scratch.get(), activeStripBytes) != static_cast<int>(activeStripBytes)) {
+    if (!lsbFile.seekSet(offset) ||
+        lsbFile.read(scratch.get(), activeStripBytes) != static_cast<int>(activeStripBytes)) {
       LOG_ERR("SLC", "Failed to read greyscale LSB strip at y=%d", yStart);
       break;
     }
     renderer.writeGrayscalePlaneStrip(true, scratch.get(), yStart, rows);
 
-    if (!msbFile.seekSet(offset) || msbFile.read(scratch.get(), activeStripBytes) != static_cast<int>(activeStripBytes)) {
+    if (!msbFile.seekSet(offset) ||
+        msbFile.read(scratch.get(), activeStripBytes) != static_cast<int>(activeStripBytes)) {
       LOG_ERR("SLC", "Failed to read greyscale MSB strip at y=%d", yStart);
       break;
     }
@@ -408,7 +410,8 @@ bool SleepScreenCache::applyGreyscalePlanes(const GfxRenderer& renderer, const s
       return false;
     }
 
-    if (!lsbFile.seekSet(offset) || lsbFile.read(scratch.get(), activeStripBytes) != static_cast<int>(activeStripBytes)) {
+    if (!lsbFile.seekSet(offset) ||
+        lsbFile.read(scratch.get(), activeStripBytes) != static_cast<int>(activeStripBytes)) {
       LOG_ERR("SLC", "Failed to read greyscale LSB strip at y=%d", yStart);
       lsbFile.close();
       msbFile.close();
@@ -416,7 +419,8 @@ bool SleepScreenCache::applyGreyscalePlanes(const GfxRenderer& renderer, const s
     }
     renderer.writeGrayscalePlaneStrip(true, scratch.get(), yStart, rows);
 
-    if (!msbFile.seekSet(offset) || msbFile.read(scratch.get(), activeStripBytes) != static_cast<int>(activeStripBytes)) {
+    if (!msbFile.seekSet(offset) ||
+        msbFile.read(scratch.get(), activeStripBytes) != static_cast<int>(activeStripBytes)) {
       LOG_ERR("SLC", "Failed to read greyscale MSB strip at y=%d", yStart);
       lsbFile.close();
       msbFile.close();

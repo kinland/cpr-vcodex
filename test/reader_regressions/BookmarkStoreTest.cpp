@@ -16,8 +16,7 @@ class TemporaryDirectory {
  public:
   TemporaryDirectory() {
     path = std::filesystem::temp_directory_path() /
-           ("cpr-vcodex-bookmarks-" +
-            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+           ("cpr-vcodex-bookmarks-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(path);
   }
   ~TemporaryDirectory() { std::filesystem::remove_all(path); }
@@ -62,8 +61,10 @@ void writeLegacyPageMark(const std::filesystem::path& path, const uint8_t versio
   const uint16_t page = 21;
   const std::string snippet = "legacy snippet";
   writePod(file, version);
-  if (version >= 3) writePod(file, count32);
-  else writePod(file, count16);
+  if (version >= 3)
+    writePod(file, count32);
+  else
+    writePod(file, count16);
   writePod(file, spine);
   writePod(file, page);
   if (version >= 2) {
@@ -142,14 +143,18 @@ TEST(BookmarkStoreV5, AnchoredPageMarkSurvivesRepagination) {
 }
 
 TEST(BookmarkStoreV5, ExactDuplicatePageStartsCanPreferTheirFirstPage) {
-  struct PageStart { uint32_t visibleTextOffset; };
+  struct PageStart {
+    uint32_t visibleTextOffset;
+  };
   const std::vector<PageStart> pages{{0}, {60}, {60}, {120}};
   EXPECT_EQ(VisibleTextPageLookup::find(pages, 60U, true), 1);
   EXPECT_EQ(VisibleTextPageLookup::find(pages, 60U, false), 2);
 }
 
 TEST(BookmarkStoreV5, AnchoredHighlightUsesItsVisibleStartAfterRepagination) {
-  struct PageStart { uint32_t visibleTextOffset; };
+  struct PageStart {
+    uint32_t visibleTextOffset;
+  };
   const std::vector<PageStart> repaginated{{0}, {40}, {95}, {160}, {225}};
   const auto page = VisibleTextPageLookup::find(repaginated, 145U, true);
   ASSERT_TRUE(page.has_value());

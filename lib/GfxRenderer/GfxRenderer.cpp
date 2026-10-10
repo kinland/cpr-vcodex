@@ -1762,8 +1762,7 @@ bool GfxRenderer::drawGreyscaleBitmapForSleep(const Bitmap& bitmap, const int x,
       return;
     }
 
-    const uint32_t byteIndex =
-        static_cast<uint32_t>(phyY) * panelWidthBytes + static_cast<uint32_t>(phyX / 8);
+    const uint32_t byteIndex = static_cast<uint32_t>(phyY) * panelWidthBytes + static_cast<uint32_t>(phyX / 8);
     const uint8_t bitPosition = static_cast<uint8_t>(7 - (phyX % 8));
     if (val == 1) {
       lsbPlane[byteIndex] |= static_cast<uint8_t>(1 << bitPosition);

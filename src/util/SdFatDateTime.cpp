@@ -1,8 +1,7 @@
-#include "TimeUtils.h"
+#include <Arduino.h>
 
 #include "CrossPointState.h"
-
-#include <Arduino.h>
+#include "TimeUtils.h"
 // Include SdFat's date helpers without HalStorage.h, which aliases FsFile to HalFile
 // and conflicts with SdFat's FsFile class in the same translation unit.
 #include <common/FsDateTime.h>

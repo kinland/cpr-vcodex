@@ -1,11 +1,10 @@
 #pragma once
 
 #include <HalStorage.h>
+#include <SleepGreyStripSink.h>
 
 #include <cstdint>
 #include <string>
-
-#include <SleepGreyStripSink.h>
 
 class GfxRenderer;
 
