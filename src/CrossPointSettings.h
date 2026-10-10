@@ -365,12 +365,7 @@ class CrossPointSettings {
 
   // Global dark mode / night mode (inverted output polarity). Upstream calls this
   // screenInverted (alias below). Cycle: OFF -> ON + Dividers -> ON; legacy 1 = ON + Dividers.
-  enum DARK_MODE {
-    DARK_MODE_OFF = 0,
-    DARK_MODE_ON_DIVIDERS = 1,
-    DARK_MODE_ON = 2,
-    DARK_MODE_COUNT
-  };
+  enum DARK_MODE { DARK_MODE_OFF = 0, DARK_MODE_ON_DIVIDERS = 1, DARK_MODE_ON = 2, DARK_MODE_COUNT };
 
   // Sleep screen settings
   uint8_t sleepScreen = DARK;

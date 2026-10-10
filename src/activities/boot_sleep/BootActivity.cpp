@@ -12,7 +12,7 @@ constexpr int BOOT_LOGO_WIDTH = 174;
 constexpr int BOOT_LOGO_HEIGHT = 24;
 constexpr int LOGO_TEXT_GAP = 10;
 constexpr int SUBTITLE_GAP = 25;
-}
+}  // namespace
 
 void BootActivity::onEnter() {
   Activity::onEnter();

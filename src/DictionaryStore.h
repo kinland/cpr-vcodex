@@ -40,11 +40,7 @@ struct DictionaryLookupResult {
 
 class DictionaryStore {
  public:
-  enum DefinitionTextSize : uint8_t {
-    DEF_TEXT_SMALL = 0,
-    DEF_TEXT_LARGE = 1,
-    DEF_TEXT_SIZE_COUNT
-  };
+  enum DefinitionTextSize : uint8_t { DEF_TEXT_SMALL = 0, DEF_TEXT_LARGE = 1, DEF_TEXT_SIZE_COUNT };
 
   static DictionaryStore& getInstance();
 

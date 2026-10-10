@@ -30,9 +30,7 @@ RTC_NOINIT_ATTR uint8_t recordedStageRaw = static_cast<uint8_t>(BootRecovery::Bo
 uint32_t recoveryMask = 0;
 bool recoveryActive = false;
 
-bool isValidStage(const uint8_t raw) {
-  return raw <= static_cast<uint8_t>(BootRecovery::BootStage::Completed);
-}
+bool isValidStage(const uint8_t raw) { return raw <= static_cast<uint8_t>(BootRecovery::BootStage::Completed); }
 
 uint32_t getSkipMaskForStage(const BootRecovery::BootStage stage) {
   using Stage = BootRecovery::BootStage;

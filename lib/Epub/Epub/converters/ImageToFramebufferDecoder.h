@@ -26,7 +26,7 @@ struct RenderConfig {
   bool preserveAlpha = false;       // Skip transparent pixels instead of compositing them against white
   std::string cachePath;            // If non-empty, decoder will write pixel cache to this path
   PixelCacheVariant cacheVariant = PixelCacheVariant::Differential;
-  std::string identityPath;         // EPUB-stable path for divider reuse tracking
+  std::string identityPath;  // EPUB-stable path for divider reuse tracking
 };
 
 class ImageToFramebufferDecoder {

@@ -107,8 +107,7 @@ bool FavoritesStore::addBook(const std::string& path, const std::string& title, 
     return false;
   }
 
-  const std::string resolvedBookId =
-      !bookId.empty() ? bookId : BookIdentity::resolveStableBookId(normalizedPath);
+  const std::string resolvedBookId = !bookId.empty() ? bookId : BookIdentity::resolveStableBookId(normalizedPath);
   const int existingIndex = findBookIndex(normalizedPath, resolvedBookId);
   if (existingIndex >= 0) {
     auto& existing = favoriteBooks[existingIndex];
@@ -164,7 +163,8 @@ bool FavoritesStore::updateBookPath(const std::string& oldKey, const std::string
   }
 
   const std::string resolvedBookId =
-      !bookId.empty() ? bookId : (!normalizedNewPath.empty() ? BookIdentity::resolveStableBookId(normalizedNewPath) : "");
+      !bookId.empty() ? bookId
+                      : (!normalizedNewPath.empty() ? BookIdentity::resolveStableBookId(normalizedNewPath) : "");
   const int existingIndex = findBookIndex(oldKey, resolvedBookId);
   if (existingIndex < 0) {
     return false;

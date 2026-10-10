@@ -24,8 +24,8 @@ inline bool isNonBreakingSpace(const char* text, const size_t length, const size
 }
 
 inline bool isUtf8Ellipsis(const char* text) {
-  return text && static_cast<unsigned char>(text[0]) == 0xE2 &&
-         static_cast<unsigned char>(text[1]) == 0x80 && static_cast<unsigned char>(text[2]) == 0xA6;
+  return text && static_cast<unsigned char>(text[0]) == 0xE2 && static_cast<unsigned char>(text[1]) == 0x80 &&
+         static_cast<unsigned char>(text[2]) == 0xA6;
 }
 
 inline bool nextToken(const char*& cursor, const char*& start, size_t& length) {

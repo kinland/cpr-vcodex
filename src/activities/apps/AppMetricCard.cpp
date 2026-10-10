@@ -19,12 +19,10 @@ void draw(GfxRenderer& renderer, const Rect& rect, const char* label, const std:
 
   const int textWidth = rect.width - options.contentInset;
   const int valueFontId =
-      options.shrinkValue &&
-              renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) > textWidth
+      options.shrinkValue && renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) > textWidth
           ? UI_10_FONT_ID
           : UI_12_FONT_ID;
-  const std::string truncatedValue =
-      renderer.truncatedText(valueFontId, value.c_str(), textWidth, EpdFontFamily::BOLD);
+  const std::string truncatedValue = renderer.truncatedText(valueFontId, value.c_str(), textWidth, EpdFontFamily::BOLD);
   renderer.drawText(valueFontId, rect.x + options.paddingX,
                     rect.y + (valueFontId == UI_12_FONT_ID ? options.valueLargeY : options.valueSmallY),
                     truncatedValue.c_str(), true, EpdFontFamily::BOLD);
@@ -32,8 +30,7 @@ void draw(GfxRenderer& renderer, const Rect& rect, const char* label, const std:
   if (options.labelMode == LabelMode::Simple) {
     renderer.drawText(UI_10_FONT_ID, rect.x + options.paddingX, rect.y + options.labelY, label);
   } else if (options.labelMode == LabelMode::Truncate) {
-    const std::string truncatedLabel =
-        renderer.truncatedText(UI_10_FONT_ID, label, textWidth, EpdFontFamily::REGULAR);
+    const std::string truncatedLabel = renderer.truncatedText(UI_10_FONT_ID, label, textWidth, EpdFontFamily::REGULAR);
     renderer.drawText(UI_10_FONT_ID, rect.x + options.paddingX, rect.y + options.labelY, truncatedLabel.c_str());
   } else {
     const auto labelLines =

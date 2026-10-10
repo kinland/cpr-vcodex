@@ -7,7 +7,8 @@ class FlashcardSessionSummaryActivity final : public Activity {
   FlashcardSessionResult summary;
 
  public:
-  FlashcardSessionSummaryActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, FlashcardSessionResult summary)
+  FlashcardSessionSummaryActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
+                                  FlashcardSessionResult summary)
       : Activity("FlashcardSessionSummary", renderer, mappedInput), summary(std::move(summary)) {}
 
   void onEnter() override;

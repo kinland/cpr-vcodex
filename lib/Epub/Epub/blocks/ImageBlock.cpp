@@ -208,8 +208,8 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
   // the file entirely.
   const uint64_t cacheHash = imagePathHash(cachePath);
   if (pxcSlotHash == cacheHash && pxcSlotWidth != 0) {
-    const bool invertDecorative = ebookImageShouldInvert(
-        renderer, static_cast<int16_t>(pxcSlotWidth), static_cast<int16_t>(pxcSlotHeight), identityPath);
+    const bool invertDecorative = ebookImageShouldInvert(renderer, static_cast<int16_t>(pxcSlotWidth),
+                                                         static_cast<int16_t>(pxcSlotHeight), identityPath);
     renderRowsFromPxcSlot(renderer, x, y, invertDecorative);
     return true;
   }
@@ -227,8 +227,7 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
 
   LOG_DBG("IMG", "Loading from cache: %s (%dx%d)", cachePath.c_str(), cachedWidth, cachedHeight);
 
-  const bool invertDecorative =
-      ebookImageShouldInvert(renderer, cachedWidth, cachedHeight, identityPath);
+  const bool invertDecorative = ebookImageShouldInvert(renderer, cachedWidth, cachedHeight, identityPath);
   const int bytesPerRow = (cachedWidth + 3) / 4;  // 2 bits per pixel, 4 pixels per byte
 
   // First pass of a page render: try to pull the payload into the RAM slot so
