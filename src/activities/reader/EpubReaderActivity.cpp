@@ -1391,7 +1391,8 @@ void EpubReaderActivity::applyReaderSettingsChanges(const ReaderSettingsSnapshot
   }
 
   renderer.setFadingFix(SETTINGS.fadingFix);
-  renderer.setDarkMode(SETTINGS.darkMode);
+  renderer.setDarkMode(SETTINGS.isDarkModeEnabled());
+  renderer.setDarkModeInvertDividers(SETTINGS.isDarkModeInvertDividers());
   renderer.setTextDarkness(SETTINGS.textDarkness);
   if (needsFullRefresh) {
     renderer.requestNextFullRefresh();
@@ -2466,7 +2467,11 @@ void EpubReaderActivity::renderContents(std::shared_ptr<Page> page, const int or
   pendingForceFullRefresh = false;
   const bool cleanImageBasePending = manualRefreshPending || pagesUntilFullRefresh <= 1;
   const bool needsTextGrayscale = SETTINGS.textAntiAliasing && !renderer.isDarkMode();
-  const bool needsAnyGrayscale = needsTextGrayscale || (pageHasImages && !BoardConfig::isEegoA4());
+  // Soft greyscale on inverted images turns fine white strokes into a noisy
+  // halo on e-ink; keep inverted images on the solid BW path instead.
+  const bool needsImageGrayscale =
+      pageHasImages && !BoardConfig::isEegoA4() && !(renderer.isDarkMode() && renderer.isDarkModeInvertDividers());
+  const bool needsAnyGrayscale = needsTextGrayscale || needsImageGrayscale;
   const bool absoluteImageGrayscale = pageHasImages && !renderer.isDarkMode() && !gpio.deviceIsX3() &&
                                       display.getController() == HalDisplay::Controller::UC8279 &&
                                       renderer.grayscaleCapabilities(HalDisplay::GrayscaleMode::Absolute).supported();

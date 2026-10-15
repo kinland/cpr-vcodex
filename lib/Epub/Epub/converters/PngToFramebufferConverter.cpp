@@ -15,6 +15,7 @@
 
 #include "DirectPixelWriter.h"
 #include "DitherUtils.h"
+#include "EbookImageDarkMode.h"
 #include "PixelCache.h"
 
 namespace {
@@ -42,6 +43,7 @@ struct PngContext {
   int lastDstY{-1};  // Track last rendered destination Y to avoid duplicates
   PixelCache cache;
   bool caching{false};
+  bool invertImages{false};
 
   uint8_t* grayLineBuffer{nullptr};
   uint8_t* alphaLineBuffer{nullptr};
@@ -252,7 +254,7 @@ int pngDrawCallback(PNGDRAW* pDraw) {
 
   // Pre-compute orientation and render-mode state once per callback.
   DirectPixelWriter pw;
-  pw.init(*ctx->renderer);
+  pw.init(*ctx->renderer, ctx->invertImages);
 
   for (int dstY = firstDstY; dstY < endDstY; dstY++) {
     ctx->lastDstY = dstY;
@@ -396,6 +398,11 @@ bool PngToFramebufferConverter::decodeToFramebuffer(const std::string& imagePath
     ctx.dstHeight = (int)(ctx.visibleHeight * ctx.scale);
   }
   ctx.lastDstY = -1;  // Reset row tracking
+  {
+    const char* identity = !config.identityPath.empty() ? config.identityPath.c_str() : imagePath.c_str();
+    ctx.invertImages = ebookImageShouldInvert(renderer, static_cast<int16_t>(ctx.dstWidth),
+                                              static_cast<int16_t>(ctx.dstHeight), identity);
+  }
 
   const int pixelType = png->getPixelType();
   const int bitsPerSample = png->getBpp();

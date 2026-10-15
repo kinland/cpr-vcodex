@@ -34,6 +34,8 @@ class I18n {
   I18n() : _language(Language::EN) {}
 
   Language _language;
+  // Scratch for labels composed from multiple StrIds (e.g. ON + Dividers).
+  mutable char _compositeBuf[48];
 };
 
 // Convenience macros
