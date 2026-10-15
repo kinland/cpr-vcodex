@@ -11,6 +11,7 @@
 #include "EndOfBookOptions.h"
 #include "ReaderPluginSession.h"
 #include "activities/Activity.h"
+#include "util/PageDwell.h"
 
 class TxtReaderActivity final : public Activity {
   ReaderPluginSession pluginSession;
@@ -47,6 +48,8 @@ class TxtReaderActivity final : public Activity {
   bool pendingForceFullRefresh = false;
   bool waitingForConfirmSecondClick = false;
   unsigned long firstConfirmClickMs = 0UL;
+  // Page-rate samples: dwell on the page currently displayed.
+  PageDwell pageDwell;
 
   // End-of-book next-book suggestions (upstream). Built lazily on the render
   // task; the ready flag is the release/acquire publication point for loop().
@@ -82,6 +85,10 @@ class TxtReaderActivity final : public Activity {
   bool handleBackNavigation();
   void requestCurrentPageFullRefresh();
   void toggleTemporaryStatusBar();
+  void creditCurrentPage();
+  void maybeCreditPage(int page);
+  void resumeAfterSubactivity();
+  void openReaderSubactivity(std::unique_ptr<Activity>&& activity, ActivityResultHandler onResult);
   std::string moveCompletedBookIfEnabled();
   void exitReaderAfterOptionalCompletedMove();
   void finishBookAndExit();

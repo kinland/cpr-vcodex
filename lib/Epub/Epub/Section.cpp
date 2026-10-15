@@ -43,7 +43,10 @@ namespace {
 //      upstream 45) so every existing cache rebuilds once.
 // v53: upstream spacing, indentation and paragraph continuity, retaining fork
 //      table fragments, ruby storage and highlight layout flags.
-constexpr uint8_t SECTION_FILE_VERSION = 53;
+// v54: per-page word counts appended after the visible-text LUT (chapter ETA).
+// v55: drop the transient v54 per-page word LUT; chapter ETA uses page-rate samples
+//      (no word table). Master's visible-text LUT layout from v53+ is unchanged.
+constexpr uint8_t SECTION_FILE_VERSION = 55;
 // Written into the version field while a build is in progress; patched to
 // SECTION_FILE_VERSION only when the build is finalized. An abandoned /
 // crash-interrupted .bin therefore carries version 0, which loadSectionFile rejects
@@ -51,15 +54,13 @@ constexpr uint8_t SECTION_FILE_VERSION = 53;
 constexpr uint8_t SECTION_FILE_INCOMPLETE_VERSION = 0;
 // Written when a build is suspended partway (reader exited or device slept mid-build).
 // The file carries valid pages 0..pageCount-1, all LUTs, and a trailer with the parse
-// watermark (bytesConsumed, totalBytes) appended after the visible-text LUT. loadSectionFile
-// accepts it so a resume shows those pages instantly; the reader extends it by
-// rebuilding in the background. Uses the same header layout as SECTION_FILE_VERSION,
-// so finalized files are untouched by this feature; older firmware treats the sentinel
-// as an unknown version and rebuilds, which is a safe downgrade.
-// MUST change in lockstep with SECTION_FILE_VERSION: the sentinel IS the partial's
-// format version, so a stale-format partial otherwise passes the header check and
-// only fails (noisily, via the block-decode error path) when a page is loaded.
-// Derived so the pairing can't be forgotten: 0xFE for v28, 0xFD for v29, ...
+// watermark (bytesConsumed, totalBytes) appended after the visible-text LUT. loadSectionFile accepts it so a resume
+// shows those pages instantly; the reader extends it by rebuilding in the background. Uses the same header layout as
+// SECTION_FILE_VERSION, so finalized files are untouched by this feature; older firmware treats the sentinel as an
+// unknown version and rebuilds, which is a safe downgrade. MUST change in lockstep with SECTION_FILE_VERSION: the
+// sentinel IS the partial's format version, so a stale-format partial otherwise passes the header check and only fails
+// (noisily, via the block-decode error path) when a page is loaded. Derived so the pairing can't be forgotten: 0xFE for
+// v28, 0xFD for v29, ...
 constexpr uint8_t SECTION_FILE_PARTIAL_VERSION = 0xFE - (SECTION_FILE_VERSION - 28);
 constexpr uint32_t HEADER_SIZE = sizeof(uint8_t) + sizeof(int) + sizeof(float) + sizeof(bool) + sizeof(bool) +
                                  sizeof(uint8_t) + sizeof(uint16_t) + sizeof(uint16_t) + sizeof(uint16_t) +
@@ -208,7 +209,8 @@ bool Section::loadSectionFile(const ReaderRenderSpec& spec) {
 
   if (filePartial) {
     // A partial's pageCount is the watermark of a suspended build. Read the watermark
-    // trailer (appended after the visible-text LUT) so estimatedTotalPages can extrapolate.
+    // trailer (appended after the visible-text LUT) so estimatedTotalPages can
+    // extrapolate.
     uint32_t visibleLutOffset = 0;
     file.seek(HEADER_SIZE - sizeof(uint32_t));
     serialization::readPod(file, visibleLutOffset);
@@ -608,7 +610,7 @@ bool Section::commitBuildFile(const uint8_t version, const uint32_t bytesConsume
   }
 
   if (asPartial) {
-    // Watermark trailer, located on load after the visible-text LUT.
+    // Watermark trailer, located on load as visibleLutOffset + pageCount * sizeof(uint32_t).
     serialization::writePod(file, bytesConsumed);
     serialization::writePod(file, totalBytes);
   }

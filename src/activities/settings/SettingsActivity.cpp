@@ -1145,6 +1145,12 @@ std::string SettingsActivity::settingValueText(const SettingInfo& setting) const
     // Guard like the valueGetter branch below: a corrupt/migrated settings
     // byte must not index past the enum table.
     const uint8_t value = SETTINGS.*(setting.valuePtr);
+    if (setting.nameId == StrId::STR_STATUS_BAR_CHAPTER_PROGRESS) {
+      char buf[64];
+      if (CrossPointSettings::formatChapterProgressLabel(value, buf, sizeof(buf))) {
+        return buf;
+      }
+    }
     const auto enumLabels = setting.enumLabels();
     if (value >= enumLabels.size()) return "";
     return I18N.get(enumLabels[value]);

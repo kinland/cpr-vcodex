@@ -388,35 +388,35 @@ void migrateLegacyStatsShortcut(CrossPointSettings& settings, const JsonDocument
 void applyLegacyStatusBarSettings(CrossPointSettings& settings) {
   switch (static_cast<CrossPointSettings::STATUS_BAR_MODE>(settings.statusBar)) {
     case CrossPointSettings::NONE:
-      settings.statusBarChapterPageCount = 0;
+      settings.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_HIDE;
       settings.statusBarBookProgressPercentage = 0;
       settings.statusBarProgressBar = CrossPointSettings::HIDE_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::HIDE_TITLE;
       settings.statusBarBattery = 0;
       break;
     case CrossPointSettings::NO_PROGRESS:
-      settings.statusBarChapterPageCount = 0;
+      settings.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_HIDE;
       settings.statusBarBookProgressPercentage = 0;
       settings.statusBarProgressBar = CrossPointSettings::HIDE_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::CHAPTER_TITLE;
       settings.statusBarBattery = 1;
       break;
     case CrossPointSettings::BOOK_PROGRESS_BAR:
-      settings.statusBarChapterPageCount = 1;
+      settings.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_PAGES;
       settings.statusBarBookProgressPercentage = 0;
       settings.statusBarProgressBar = CrossPointSettings::BOOK_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::CHAPTER_TITLE;
       settings.statusBarBattery = 1;
       break;
     case CrossPointSettings::ONLY_BOOK_PROGRESS_BAR:
-      settings.statusBarChapterPageCount = 1;
+      settings.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_PAGES;
       settings.statusBarBookProgressPercentage = 0;
       settings.statusBarProgressBar = CrossPointSettings::BOOK_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::HIDE_TITLE;
       settings.statusBarBattery = 0;
       break;
     case CrossPointSettings::CHAPTER_PROGRESS_BAR:
-      settings.statusBarChapterPageCount = 0;
+      settings.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_HIDE;
       settings.statusBarBookProgressPercentage = 1;
       settings.statusBarProgressBar = CrossPointSettings::CHAPTER_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::CHAPTER_TITLE;
@@ -424,7 +424,7 @@ void applyLegacyStatusBarSettings(CrossPointSettings& settings) {
       break;
     case CrossPointSettings::FULL:
     default:
-      settings.statusBarChapterPageCount = 1;
+      settings.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_PAGES;
       settings.statusBarBookProgressPercentage = 1;
       settings.statusBarProgressBar = CrossPointSettings::HIDE_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::CHAPTER_TITLE;
@@ -481,8 +481,22 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
     dest[maxLen - 1] = '\0';
   };
 
-  if (doc["statusBarChapterPageCount"].isNull()) {
+  if (doc["statusBarChapterProgress"].isNull() && doc["statusBarChapterPageCount"].isNull()) {
     applyLegacyStatusBarSettings(s);
+  } else if (doc["statusBarChapterProgress"].isNull()) {
+    // Migrate pre-enum toggles (page count, and briefly also time remaining) into the enum.
+    const uint8_t showPages = doc["statusBarChapterPageCount"] | static_cast<uint8_t>(1);
+    const uint8_t showTime = doc["statusBarChapterTimeRemaining"] | static_cast<uint8_t>(0);
+    if (showPages && showTime) {
+      s.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME;
+    } else if (showTime) {
+      s.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_TIME;
+    } else if (showPages) {
+      s.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_PAGES;
+    } else {
+      s.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_HIDE;
+    }
+    if (needsResave) *needsResave = true;
   }
 
   loadEnum("sleepScreen", s.sleepScreen, CrossPointSettings::SLEEP_SCREEN_MODE_COUNT);
@@ -698,7 +712,8 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
     s.opdsPassword[sizeof(s.opdsPassword) - 1] = '\0';
   }
 
-  loadToggle("statusBarChapterPageCount", s.statusBarChapterPageCount);
+  loadEnum("statusBarChapterProgress", s.statusBarChapterProgress,
+           CrossPointSettings::STATUS_BAR_CHAPTER_PROGRESS_COUNT);
   loadToggle("statusBarBookProgressPercentage", s.statusBarBookProgressPercentage);
   loadEnum("statusBarProgressBar", s.statusBarProgressBar, CrossPointSettings::STATUS_BAR_PROGRESS_BAR_COUNT);
   loadEnum("statusBarProgressBarThickness", s.statusBarProgressBarThickness,
@@ -1161,7 +1176,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["koSyncAutoPullOnOpen"] = s.koSyncAutoPullOnOpen;
   doc["koSyncAutoPushOnClose"] = s.koSyncAutoPushOnClose;
 
-  doc["statusBarChapterPageCount"] = s.statusBarChapterPageCount;
+  doc["statusBarChapterProgress"] = s.statusBarChapterProgress;
   doc["statusBarBookProgressPercentage"] = s.statusBarBookProgressPercentage;
   doc["statusBarProgressBar"] = s.statusBarProgressBar;
   doc["statusBarProgressBarThickness"] = s.statusBarProgressBarThickness;
@@ -1718,6 +1733,10 @@ bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char
     writer.value(book.chapterTitle);
     writer.literal(",\"totalReadingMs\":");
     writer.value(book.totalReadingMs);
+    writer.literal(",\"totalPagesReadingMs\":");
+    writer.value(book.totalPagesReadingMs);
+    writer.literal(",\"totalPagesRead\":");
+    writer.value(book.totalPagesRead);
     writer.literal(",\"sessions\":");
     writer.value(book.sessions);
     writer.literal(",\"lastSessionMs\":");
@@ -1903,6 +1922,10 @@ bool JsonSettingsIO::loadReadingStatsDocument(ReadingStatsStore& store, const Js
     book.coverBmpPath = obj["coverBmpPath"] | std::string("");
     book.chapterTitle = obj["chapterTitle"] | std::string("");
     book.totalReadingMs = obj["totalReadingMs"] | static_cast<uint64_t>(0);
+    // Page-rate ETA samples. Legacy totalWordsRead / totalWordsReadingMs (word-rate
+    // prototypes) are intentionally ignored — rates are not convertible.
+    book.totalPagesReadingMs = obj["totalPagesReadingMs"] | static_cast<uint64_t>(0);
+    book.totalPagesRead = obj["totalPagesRead"] | static_cast<uint64_t>(0);
     book.sessions = obj["sessions"] | static_cast<uint32_t>(0);
     book.lastSessionMs = obj["lastSessionMs"] | static_cast<uint32_t>(0);
     book.firstReadAt = obj["firstReadAt"] | static_cast<uint32_t>(0);
