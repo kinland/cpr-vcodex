@@ -6,12 +6,12 @@
 
 #include <string>
 
+#include "BookIdentity.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "FavoritesStore.h"
 #include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
-#include "BookIdentity.h"
 
 namespace {
 constexpr char FINISHED_BOOKS_DIRECTORY[] = "/finished_books";
@@ -43,8 +43,7 @@ std::string makeUniqueDestinationPath(const std::string& sourcePath) {
 
   std::string candidate = std::string(FINISHED_BOOKS_DIRECTORY) + "/" + filename;
   for (int copyIndex = 2; Storage.exists(candidate.c_str()) && copyIndex < 100; ++copyIndex) {
-    candidate =
-        std::string(FINISHED_BOOKS_DIRECTORY) + "/" + stem + " (" + std::to_string(copyIndex) + ")" + extension;
+    candidate = std::string(FINISHED_BOOKS_DIRECTORY) + "/" + stem + " (" + std::to_string(copyIndex) + ")" + extension;
   }
   return candidate;
 }

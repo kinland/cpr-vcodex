@@ -96,6 +96,7 @@ class ActivityManager {
   void* renderTaskHandle = this;
   void requestUiTransitionRefresh(uint8_t, uint8_t) {}
   void goHome() { replaceActivity(std::make_unique<Activity>("Home")); }
+  void drainPendingActions();
   void loop();
   void exitActivity(const RenderLock&);
   void replaceActivity(std::unique_ptr<Activity>&&);

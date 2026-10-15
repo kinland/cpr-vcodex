@@ -125,57 +125,7 @@ void ActivityManager::renderTaskLoop() {
   }
 }
 
-void ActivityManager::loop() {
-  // A release guard suppresses input, not an already requested transition.
-  // In particular, goToSleep() must finish teardown and draw its sleep screen.
-  if (mappedInput.consumeSuppressedRelease() && pendingAction == PendingAction::None) return;
-
-  if (currentActivity && currentActivity->requiresExclusiveStorageLoop()) {
-    currentActivity->loop();
-    // An exclusive-storage activity must restart rather than navigate away:
-    // processing a pending action here could re-enable filesystem users while
-    // the USB host still owns the raw SD card.
-    if (requestedUpdate.exchange(false) && renderTaskHandle) {
-      xTaskNotify(renderTaskHandle, 1, eIncrement);
-    }
-    return;
-  }
-
-  // onEnter() can queue a replacement before this loop is called (the reader
-  // dispatcher does so on a splashless wake). Do not let that outgoing screen
-  // handle input or overwrite the queued destination with its fallback route.
-  if (currentActivity && pendingAction == PendingAction::None) {
-    if (!currentActivity->isHomeActivity() && mappedInput.wasHomeGesture()) {
-      if (currentActivity->handleHomeGesture()) {
-        return;
-      }
-      goHome();
-      return;
-    }
-
-    // Tap-first control-center entry: a tap on the status-bar band of the
-    // top-level tab screens opens it, mirroring the top-edge swipe (which some
-    // panels' etched glass makes unreliable). The reader keeps its clean page
-    // (no status bar there to tap). Touch boards only, like the swipe itself.
-    bool statusBarTap = false;
-    if (mappedInput.hasTouch() &&
-        (currentActivity->name == "Home" || currentActivity->name == "FileBrowser" ||
-         currentActivity->name == "Settings" || currentActivity->name == "NetworkModeSelection")) {
-      int tx = 0;
-      int ty = 0;
-      // The header back button shares this band; its taps stay Back.
-      statusBarTap = mappedInput.wasScreenTapped(tx, ty) && ty < 44 && !HeaderBackTapTarget::contains(tx, ty);
-    }
-    if (currentActivity->name != "FrontlightPanel" && (statusBarTap || mappedInput.wasLightPanelGesture())) {
-      haptic_feedback::touchAction();
-      pushActivity(std::make_unique<FrontlightPanelActivity>(renderer, mappedInput));
-      return;
-    }
-
-    // Note: do not hold a lock here, the loop() method must be responsible for acquire one if needed
-    currentActivity->loop();
-  }
-
+void ActivityManager::drainPendingActions() {
   while (pendingAction != PendingAction::None) {
     if (pendingAction == PendingAction::Pop) {
       RenderLock lock;
@@ -264,8 +214,78 @@ void ActivityManager::loop() {
 
       // onEnter may request another pending action, we will handle it in the next loop iteration
       continue;
+    } else {
+      LOG_ERR("ACT", "pendingAction=%d with null pendingActivity; clearing", static_cast<int>(pendingAction));
+      pendingAction = PendingAction::None;
     }
   }
+}
+
+void ActivityManager::loop() {
+  // Master #225 / USB MSC: exclusive storage must keep owning the SD. Do not
+  // drain a queued Home/replace while the host still has the raw card.
+  if (currentActivity && currentActivity->requiresExclusiveStorageLoop()) {
+    currentActivity->loop();
+    if (requestedUpdate.exchange(false) && renderTaskHandle) {
+      xTaskNotify(renderTaskHandle, 1, eIncrement);
+    }
+    return;
+  }
+
+  // Master #225: a release guard suppresses input, not an already requested
+  // transition. In particular, goToSleep() must finish teardown and draw.
+  if (mappedInput.consumeSuppressedRelease() && pendingAction == PendingAction::None) return;
+
+  // fix/sleep-screen + master #225: ReaderActivity::onEnter() queues the real
+  // reader before this loop runs. Apply that replace before the trampoline's
+  // loop() can fall through to the file browser. Track whether we drained so
+  // stale Home/input from the outgoing screen cannot hit the new activity in
+  // the same iteration (master StaleHomeGesture).
+  const bool drainedPending = pendingAction != PendingAction::None;
+  drainPendingActions();
+
+  if (!drainedPending && currentActivity) {
+    if (!currentActivity->isHomeActivity() && mappedInput.wasHomeGesture()) {
+      if (currentActivity->handleHomeGesture()) {
+        return;
+      }
+      goHome();
+      drainPendingActions();
+      if (requestedUpdate.exchange(false) && renderTaskHandle) {
+        xTaskNotify(renderTaskHandle, 1, eIncrement);
+      }
+      return;
+    }
+
+    // Tap-first control-center entry: a tap on the status-bar band of the
+    // top-level tab screens opens it, mirroring the top-edge swipe (which some
+    // panels' etched glass makes unreliable). The reader keeps its clean page
+    // (no status bar there to tap). Touch boards only, like the swipe itself.
+    bool statusBarTap = false;
+    if (mappedInput.hasTouch() &&
+        (currentActivity->name == "Home" || currentActivity->name == "FileBrowser" ||
+         currentActivity->name == "Settings" || currentActivity->name == "NetworkModeSelection")) {
+      int tx = 0;
+      int ty = 0;
+      // The header back button shares this band; its taps stay Back.
+      statusBarTap = mappedInput.wasScreenTapped(tx, ty) && ty < 44 && !HeaderBackTapTarget::contains(tx, ty);
+    }
+    if (currentActivity->name != "FrontlightPanel" && (statusBarTap || mappedInput.wasLightPanelGesture())) {
+      haptic_feedback::touchAction();
+      pushActivity(std::make_unique<FrontlightPanelActivity>(renderer, mappedInput));
+      drainPendingActions();
+      if (requestedUpdate.exchange(false) && renderTaskHandle) {
+        xTaskNotify(renderTaskHandle, 1, eIncrement);
+      }
+      return;
+    }
+
+    // Note: do not hold a lock here, the loop() method must be responsible for acquire one if needed
+    currentActivity->loop();
+  }
+
+  // loop()/gestures may have queued another transition
+  drainPendingActions();
 
   if (requestedUpdate.exchange(false)) {
     // Using direct notification to signal the render task to update
@@ -307,6 +327,10 @@ void ActivityManager::replaceActivity(std::unique_ptr<Activity>&& newActivity) {
     mappedInput.armBackReleaseGuard();
     requestUiTransitionRefresh(previousWeight, nextWeight);
     currentActivity->onEnter();
+    // ReaderActivity::onEnter() queues Epub/Txt/Xtc as a deferred replace. Apply it
+    // before returning so boot/wake goToReader() does not leave the trampoline
+    // current across the gap until the first loop().
+    drainPendingActions();
   }
 }
 

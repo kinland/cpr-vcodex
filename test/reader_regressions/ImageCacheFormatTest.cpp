@@ -18,6 +18,5 @@ TEST(ImageCacheFormatRegression, AccountsForPackedRowsAndHeader) {
 }
 
 TEST(ImageCacheFormatRegression, SeparatesWaveformCalibrations) {
-  EXPECT_NE(static_cast<uint8_t>(PixelCacheVariant::Differential),
-            static_cast<uint8_t>(PixelCacheVariant::FactoryLut));
+  EXPECT_NE(static_cast<uint8_t>(PixelCacheVariant::Differential), static_cast<uint8_t>(PixelCacheVariant::FactoryLut));
 }

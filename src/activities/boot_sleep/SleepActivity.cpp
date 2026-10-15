@@ -42,8 +42,12 @@
 
 namespace {
 bool canUseSleepCache(const Bitmap& bitmap) {
-  return !(bitmap.hasGreyscale() &&
-           SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER);
+  return !bitmap.hasGreyscale() ||
+         SETTINGS.sleepScreenCoverFilter != CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER;
+}
+
+bool wantsGreyscaleSleepCache() {
+  return SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER;
 }
 // Metalio: B/W sleep images use the full 0xF7 waveform instead of HALF (two
 // 0xFC partials), matching the clean pass before absolute gray below.
@@ -95,19 +99,60 @@ void displaySleepGrayscaleBase(const GfxRenderer& renderer) {
   renderer.displayGrayscaleBase(mode);
 }
 
+bool tryDisplayCachedSleepScreen(const GfxRenderer& renderer, const std::string& sourcePath) {
+  auto& mutableRenderer = const_cast<GfxRenderer&>(renderer);
+  if (wantsGreyscaleSleepCache()) {
+    if (SleepScreenCache::loadGreyscale(mutableRenderer, sourcePath)) {
+      // BW base first, then grey planes. Loading greys before base on X3 sets
+      // lsbValid and forces displayGrayscaleBase to wipe controller RAM.
+      displaySleepGrayscaleBase(renderer);
+      if (!SleepScreenCache::applyGreyscalePlanes(renderer, sourcePath)) {
+        LOG_ERR("SLP", "Cached greyscale planes failed to apply; falling back");
+        return false;
+      }
+      renderer.displayGrayBuffer();
+      mutableRenderer.setRenderMode(GfxRenderer::BW);
+      return true;
+    }
+    return false;
+  }
+
+  if (SleepScreenCache::load(mutableRenderer, sourcePath)) {
+    displaySleepBuffer(renderer);
+    return true;
+  }
+  return false;
+}
+
 template <typename RenderFn>
-void renderSleepGrayscaleOverlay(GfxRenderer& renderer, RenderFn&& renderFn) {
+void renderSleepGrayscaleOverlay(GfxRenderer& renderer, RenderFn&& renderFn, const std::string& cacheSourcePath = {},
+                                 const uint32_t cacheSourceSize = 0) {
+  // BW plane is already drawn into the framebuffer by the caller.
+  bool cacheOk = !cacheSourcePath.empty() && cacheSourceSize != 0 &&
+                 SleepScreenCache::prepareGreyscaleSave(cacheSourcePath, cacheSourceSize);
+  if (cacheOk && !SleepScreenCache::saveFrameBufferPlane(renderer, cacheSourcePath, cacheSourceSize, ".raw")) {
+    LOG_ERR("SLP", "Failed to cache sleep BW plane");
+    cacheOk = false;
+  }
+
   displaySleepGrayscaleBase(renderer);
 
   renderer.clearScreen(0x00);
   renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
   renderFn();
   renderer.copyGrayscaleLsbBuffers();
+  if (cacheOk && !SleepScreenCache::saveFrameBufferPlane(renderer, cacheSourcePath, cacheSourceSize, ".lsb.raw")) {
+    LOG_ERR("SLP", "Failed to cache sleep LSB plane");
+    cacheOk = false;
+  }
 
   renderer.clearScreen(0x00);
   renderer.setRenderMode(GfxRenderer::GRAYSCALE_MSB);
   renderFn();
   renderer.copyGrayscaleMsbBuffers();
+  if (cacheOk && !SleepScreenCache::saveFrameBufferPlane(renderer, cacheSourcePath, cacheSourceSize, ".msb.raw")) {
+    LOG_ERR("SLP", "Failed to cache sleep MSB plane");
+  }
 
   renderer.displayGrayBuffer();
   renderer.setRenderMode(GfxRenderer::BW);
@@ -1130,7 +1175,19 @@ bool drawPngSleepBackground(const GfxRenderer& renderer, const std::string& sour
 
 bool renderBitmapStatsSleepScreen(GfxRenderer& renderer, const std::string& sourcePath, const Rect& statsPanel,
                                   const ReadingBookStats* book, const bool footerOnly) {
-  if (SleepScreenCache::load(renderer, sourcePath)) {
+  if (wantsGreyscaleSleepCache()) {
+    if (SleepScreenCache::loadGreyscale(renderer, sourcePath)) {
+      drawCoverStatsPanel(renderer, statsPanel, book, footerOnly);
+      displaySleepGrayscaleBase(renderer);
+      if (!SleepScreenCache::applyGreyscalePlanes(renderer, sourcePath)) {
+        LOG_ERR("SLP", "Cached greyscale planes failed to apply for stats sleep");
+        return false;
+      }
+      renderer.displayGrayBuffer();
+      renderer.setRenderMode(GfxRenderer::BW);
+      return true;
+    }
+  } else if (SleepScreenCache::load(renderer, sourcePath)) {
     drawCoverStatsPanel(renderer, statsPanel, book, footerOnly);
     displaySleepBuffer(renderer);
     return true;
@@ -1295,18 +1352,18 @@ void SleepActivity::renderCustomSleepScreen() const {
       }
     } else {
       GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
-      HalFile file;
-      if (SleepScreenCache::load(renderer, selected.path)) {
-        displaySleepBuffer(renderer);
+      if (tryDisplayCachedSleepScreen(renderer, selected.path)) {
         commitCustomSleepImage(selected);
         return;
       }
+      HalFile file;
       if (Storage.openFileForRead("SLP", selected.path, file)) {
         LOG_DBG("SLP", "Loading sleep image: %s", selected.path.c_str());
+        const uint32_t sourceFileSize = file.fileSize();
         delay(100);
         Bitmap bitmap(file, true);
         if (bitmap.parseHeaders() == BmpReaderError::Ok) {
-          renderBitmapSleepScreen(bitmap, selected.path);
+          renderBitmapSleepScreen(bitmap, selected.path, false, sourceFileSize);
           file.close();
           commitCustomSleepImage(selected);
           return;
@@ -1319,18 +1376,18 @@ void SleepActivity::renderCustomSleepScreen() const {
   HalFile file;
   if (Storage.openFileForRead("SLP", "/sleep.bmp", file)) {
     GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
+    const uint32_t sourceFileSize = file.fileSize();
     Bitmap bitmap(file, true,
                   renderer.grayscaleCapabilities(sleepGrayscaleMode(renderer)).supported() &&
                       display.getController() == HalDisplay::Controller::SSD1677 &&
                       SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER);
     if (bitmap.parseHeaders() == BmpReaderError::Ok) {
       LOG_DBG("SLP", "Loading: /sleep.bmp");
-      if (SleepScreenCache::load(renderer, "/sleep.bmp")) {
-        displaySleepBuffer(renderer);
+      if (tryDisplayCachedSleepScreen(renderer, "/sleep.bmp")) {
         file.close();
         return;
       }
-      renderBitmapSleepScreen(bitmap, "/sleep.bmp");
+      renderBitmapSleepScreen(bitmap, "/sleep.bmp", false, sourceFileSize);
       file.close();
       return;
     }
@@ -1370,7 +1427,7 @@ void SleepActivity::renderDefaultSleepScreen() const {
 }
 
 void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const std::string& sourcePath,
-                                            const bool preserveBackground) const {
+                                            const bool preserveBackground, const uint32_t sourceFileSize) const {
   int x, y;
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
@@ -1416,6 +1473,12 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const std::str
       bitmap.hasGreyscale() && (preserveBackground || SETTINGS.sleepScreenCoverFilter ==
                                                           CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER);
 
+  // Always draw BW into the framebuffer first (master's transparent overlays keep
+  // white-as-transparent via preserveBackground). Greyscale uses the overlay path
+  // which stays within normal heap limits and can snapshot each plane into
+  // sleep_cache. Dual-plane stream encode needs ~104KB contiguous RAM and routinely
+  // OOMs on ESP32-C3, which aborted cache writes and forced a slow cold overlay
+  // on every sleep.
   if (!renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY, preserveBackground)) {
     renderer.displayBuffer(kSleepClean);
     return;
@@ -1426,16 +1489,18 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const std::str
     renderer.invertScreen();
   }
 
-  if (!preserveBackground && !sourcePath.empty() && canUseSleepCache(bitmap)) {
-    SleepScreenCache::save(renderer, sourcePath);
-  }
-
   if (hasGreyscale) {
-    renderSleepGrayscaleOverlay(renderer, [&]() {
-      bitmap.rewindToData();
-      renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY);
-    });
+    renderSleepGrayscaleOverlay(
+        renderer,
+        [&]() {
+          bitmap.rewindToData();
+          renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY);
+        },
+        preserveBackground ? std::string{} : sourcePath, preserveBackground ? 0u : sourceFileSize);
   } else {
+    if (!preserveBackground && !sourcePath.empty() && canUseSleepCache(bitmap)) {
+      SleepScreenCache::save(renderer, sourcePath);
+    }
     displaySleepBuffer(renderer);
   }
 }
@@ -1628,16 +1693,17 @@ void SleepActivity::renderCoverSleepScreen() const {
     return (this->*renderNoCoverSleepScreen)();
   }
 
-  HalFile file;
-  if (SleepScreenCache::load(renderer, coverBmpPath)) {
-    displaySleepBuffer(renderer);
+  if (tryDisplayCachedSleepScreen(renderer, coverBmpPath)) {
     return;
   }
+
+  HalFile file;
   if (Storage.openFileForRead("SLP", coverBmpPath, file)) {
+    const uint32_t sourceFileSize = file.fileSize();
     Bitmap bitmap(file);
     if (bitmap.parseHeaders() == BmpReaderError::Ok) {
       LOG_DBG("SLP", "Rendering sleep cover: %s", coverBmpPath.c_str());
-      renderBitmapSleepScreen(bitmap, coverBmpPath);
+      renderBitmapSleepScreen(bitmap, coverBmpPath, false, sourceFileSize);
       file.close();
       return;
     }

@@ -21,8 +21,9 @@ class SleepActivity final : public Activity {
   void renderCoverStatsSleepScreen(bool footerOnly = false) const;
   void renderCustomStatsSleepScreen(bool footerOnly = false) const;
   // preserveBackground: draw over the retained frame (transparent overlays) instead of clearing first.
+  // sourceFileSize: optional size for greyscale sleep-cache streaming (0 = look up / skip stream cache).
   void renderBitmapSleepScreen(const Bitmap& bitmap, const std::string& sourcePath = "",
-                               bool preserveBackground = false) const;
+                               bool preserveBackground = false, uint32_t sourceFileSize = 0) const;
   bool renderPngSleepScreen(const std::string& sourcePath) const;
   // Transparent overlay sleep (upstream): alpha BMP/PNG art composited over the last screen.
   bool renderSleepOverlayFile(HalFile& file, const char* pathForLog) const;

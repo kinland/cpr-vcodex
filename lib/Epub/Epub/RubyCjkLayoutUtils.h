@@ -12,8 +12,6 @@ inline int reservedAdjacentOverlap(const int overlap, const int adjacentWidth, c
   return adjacentIsCjk ? overlap : std::max(0, overlap - adjacentWidth / 2);
 }
 
-inline bool preferLineBreakCandidate(const int candidateCost, const int bestCost) {
-  return candidateCost <= bestCost;
-}
+inline bool preferLineBreakCandidate(const int candidateCost, const int bestCost) { return candidateCost <= bestCost; }
 
 }  // namespace RubyCjkLayoutUtils

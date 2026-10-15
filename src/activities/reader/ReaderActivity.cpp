@@ -273,6 +273,11 @@ void ReaderActivity::loop() {
     loadFailurePopup.handleInput(mappedInput, [this] { requestUpdate(); });
     return;
   }
+  // onEnter() queues the format reader via replaceActivity(); do not fall through
+  // to the file browser while that replace is still pending.
+  if (activityManager.hasPendingTransition()) {
+    return;
+  }
   goToLibrary(initialBookPath);
 }
 

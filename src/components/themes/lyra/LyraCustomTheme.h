@@ -13,7 +13,7 @@ constexpr ThemeMetrics values = [] {
   v.keyboardCenteredText = true;
   return v;
 }();
-}
+}  // namespace LyraCustomMetrics
 
 class LyraCustomTheme : public LyraTheme {
  public:
